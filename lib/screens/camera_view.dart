@@ -200,9 +200,16 @@ class _CameraViewState extends State<CameraView>
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(minWidth: 140),
                     decoration: BoxDecoration(
-                      color: AppColors.stone900.withValues(alpha: 0.8),
+                      color: AppColors.stone900.withValues(alpha: 0.96),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: Colors.white24),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black54,
+                          blurRadius: 20,
+                          offset: Offset(0, 8),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,

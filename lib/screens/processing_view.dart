@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -6,8 +7,8 @@ import 'package:flutter/material.dart';
 import '../i18n/translations.dart';
 import '../theme.dart';
 
-/// Ekran obrade: animirani bot u prstenu koji se vrti, disclaimer,
-/// umanjena slika računa (grayscale, blago rotirana).
+/// Ekran obrade: animirani bot u prstenu, rotirajuće statusne poruke,
+/// disclaimer, umanjena slika računa sa skener efektom preko nje.
 class ProcessingView extends StatefulWidget {
   const ProcessingView({super.key, required this.t, this.image});
 
@@ -35,16 +36,39 @@ class _ProcessingViewState extends State<ProcessingView>
     duration: const Duration(milliseconds: 1600),
   )..repeat();
 
+  late final AnimationController _scan = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1900),
+  )..repeat(reverse: true);
+
+  Timer? _stepTimer;
+  int _stepIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _stepTimer = Timer.periodic(const Duration(milliseconds: 1700), (_) {
+      if (!mounted) return;
+      setState(() {
+        _stepIndex = (_stepIndex + 1) % widget.t.processingSteps.length;
+      });
+    });
+  }
+
   @override
   void dispose() {
     _spin.dispose();
     _bob.dispose();
     _sparkle.dispose();
+    _scan.dispose();
+    _stepTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final steps = widget.t.processingSteps;
+    final step = steps[_stepIndex % steps.length];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 26),
       child: Column(
@@ -56,6 +80,21 @@ class _ProcessingViewState extends State<ProcessingView>
             child: Stack(
               alignment: Alignment.center,
               children: [
+                // Blagi pulsirajući sjaj iza bota — utisak "razmišljanja".
+                AnimatedBuilder(
+                  animation: _sparkle,
+                  builder: (context, child) {
+                    final t = (math.sin(_sparkle.value * 2 * math.pi) + 1) / 2;
+                    return Container(
+                      width: 100 + 14 * t,
+                      height: 100 + 14 * t,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.emerald400.withValues(alpha: 0.10 + 0.08 * t),
+                      ),
+                    );
+                  },
+                ),
                 RotationTransition(
                   turns: _spin,
                   child: CustomPaint(
@@ -109,10 +148,27 @@ class _ProcessingViewState extends State<ProcessingView>
             widget.t.analyzing,
             style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 4),
-          Text(
-            widget.t.extracting,
-            style: const TextStyle(fontSize: 14, color: AppColors.stone500),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 20,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.35),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: Text(
+                step,
+                key: ValueKey(step),
+                style: const TextStyle(fontSize: 14, color: AppColors.stone500),
+              ),
+            ),
           ),
           const SizedBox(height: 30),
           Container(
@@ -162,21 +218,34 @@ class _ProcessingViewState extends State<ProcessingView>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Opacity(
-                    opacity: 0.5,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.matrix(<double>[
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0.2126, 0.7152, 0.0722, 0, 0,
-                        0, 0, 0, 1, 0,
-                      ]),
-                      child: Image.memory(
-                        widget.image!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
+                  child: Stack(
+                    children: [
+                      Opacity(
+                        opacity: 0.5,
+                        child: ColorFiltered(
+                          colorFilter: const ColorFilter.matrix(<double>[
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0.2126, 0.7152, 0.0722, 0, 0,
+                            0, 0, 0, 1, 0,
+                          ]),
+                          child: Image.memory(
+                            widget.image!,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                        ),
                       ),
-                    ),
+                      // Skener linija koja putuje preko slike, kao da se čita.
+                      Positioned.fill(
+                        child: AnimatedBuilder(
+                          animation: _scan,
+                          builder: (context, child) => CustomPaint(
+                            painter: _ScanLinePainter(progress: _scan.value),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -209,4 +278,39 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Horizontalna glow linija koja putuje gore-dole preko slike, simulirajući
+/// skeniranje dokumenta redom po redom.
+class _ScanLinePainter extends CustomPainter {
+  _ScanLinePainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height * progress;
+
+    final glowPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          AppColors.emerald400.withValues(alpha: 0),
+          AppColors.emerald400.withValues(alpha: 0.55),
+          AppColors.emerald400.withValues(alpha: 0),
+        ],
+      ).createShader(Rect.fromLTWH(0, y - 16, size.width, 32))
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(Rect.fromLTWH(0, y - 16, size.width, 32), glowPaint);
+
+    final linePaint = Paint()
+      ..color = AppColors.emerald400.withValues(alpha: 0.9)
+      ..strokeWidth = 2;
+    canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScanLinePainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }

@@ -243,7 +243,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _handleShare() async {
     final data = _invoiceData;
     if (data == null) return;
-    await share_utils.shareQrCode(generateIpsString(data), _t.title, _t.shareDesc);
+    await share_utils.shareQrCode(
+      generateIpsString(data),
+      _t.title,
+      _t.shareDesc,
+    );
   }
 
   void _reset() {
@@ -292,8 +296,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           BoxShadow(color: Colors.black38, blurRadius: 12),
                         ],
                       ),
-                      child: const Icon(Icons.close,
-                          size: 20, color: AppColors.stone600),
+                      child: const Icon(
+                        Icons.close,
+                        size: 20,
+                        color: AppColors.stone600,
+                      ),
                     ),
                   ),
                 ),
@@ -312,87 +319,97 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final t = _t;
     return Scaffold(
       backgroundColor: AppColors.stone50,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 448),
-          child: Container(
-            color: Colors.white,
-            child: Stack(
-              children: [
-                Column(
-                  children: [
-                    // Header — sakriven tokom kamere (full-bleed prikaz)
-                    if (_state != AppState.capturing) _buildHeader(t),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 360),
-                        switchInCurve: const Cubic(0.22, 1, 0.36, 1),
-                        switchOutCurve: Curves.easeOut,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.015),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        ),
-                        child: _buildBody(t),
-                      ),
-                    ),
-                  ],
-                ),
-                // Toast za kopiranje
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 24,
-                  child: IgnorePointer(
-                    child: AnimatedSlide(
-                      offset: _copied ? Offset.zero : const Offset(0, 0.4),
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOut,
-                      child: AnimatedOpacity(
-                        opacity: _copied ? 1 : 0,
-                        duration: const Duration(milliseconds: 250),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 16),
-                          decoration: BoxDecoration(
-                            color: AppColors.stone900,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Colors.black45,
-                                blurRadius: 24,
-                                offset: Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.check_circle_outline,
-                                  size: 18, color: AppColors.emerald400),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  t.copied,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 448),
+            child: Container(
+              color: Colors.white,
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      // Header — sakriven tokom kamere (full-bleed prikaz)
+                      if (_state != AppState.capturing) _buildHeader(t),
+                      Expanded(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 360),
+                          switchInCurve: const Cubic(0.22, 1, 0.36, 1),
+                          switchOutCurve: Curves.easeOut,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.015),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
                                 ),
                               ),
-                            ],
+                          child: _buildBody(t),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Toast za kopiranje
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 24,
+                    child: IgnorePointer(
+                      child: AnimatedSlide(
+                        offset: _copied ? Offset.zero : const Offset(0, 0.4),
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeOut,
+                        child: AnimatedOpacity(
+                          opacity: _copied ? 1 : 0,
+                          duration: const Duration(milliseconds: 250),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.stone900,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black45,
+                                  blurRadius: 24,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_outline,
+                                  size: 18,
+                                  color: AppColors.emerald400,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    t.copied,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -443,11 +460,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     children: [
                       TextSpan(
-                          text: 'Invoice',
-                          style: TextStyle(color: AppColors.emerald600)),
+                        text: 'Invoice',
+                        style: TextStyle(color: AppColors.emerald600),
+                      ),
                       TextSpan(
-                          text: '2IPS',
-                          style: TextStyle(color: AppColors.stone900)),
+                        text: '2IPS',
+                        style: TextStyle(color: AppColors.stone900),
+                      ),
                     ],
                   ),
                 ),
@@ -486,7 +505,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onTap: () => setState(() => _lang = l),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 5),
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: _lang == l ? Colors.white : Colors.transparent,
                         borderRadius: BorderRadius.circular(999),
@@ -579,7 +600,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 }
 
 class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({required this.icon, required this.onTap, this.tooltip});
+  const _HeaderIconButton({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+  });
 
   final IconData icon;
   final VoidCallback onTap;

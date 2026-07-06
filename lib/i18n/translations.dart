@@ -11,6 +11,7 @@ class Translations {
     required this.or,
     required this.analyzing,
     required this.extracting,
+    required this.processingSteps,
     required this.extracted,
     required this.amount,
     required this.recipient,
@@ -53,6 +54,7 @@ class Translations {
   final String or;
   final String analyzing;
   final String extracting;
+  final List<String> processingSteps;
   final String extracted;
   final String amount;
   final String recipient;
@@ -98,6 +100,11 @@ const translations = <Language, Translations>{
     or: 'Ili',
     analyzing: 'Analiziranje računa',
     extracting: 'Izvlačenje podataka pomoću AI...',
+    processingSteps: [
+      'Čitanje teksta sa računa...',
+      'Prepoznavanje iznosa i računa...',
+      'Provera podataka...',
+    ],
     extracted: 'Podaci su pročitani',
     amount: 'Iznos (RSD)',
     recipient: 'Primalac',
@@ -147,6 +154,11 @@ const translations = <Language, Translations>{
     or: 'Or',
     analyzing: 'Analyzing Invoice',
     extracting: 'Extracting payment details using AI...',
+    processingSteps: [
+      'Reading receipt text...',
+      'Detecting amount & account...',
+      'Validating details...',
+    ],
     extracted: 'Invoice Details Read',
     amount: 'Amount (RSD)',
     recipient: 'Recipient',
