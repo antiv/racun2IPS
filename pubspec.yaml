@@ -1,0 +1,43 @@
+name: invoice2ips
+description: "Invoice2IPS — skeniranje računa i generisanje NBS IPS QR koda"
+publish_to: 'none'
+
+# Verzija prati Tauri projekat (invoice2ips): versionName+versionCode.
+version: 1.0.16+17
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  # Kamera: preview, fotografisanje, lampa (torch), izbor rezolucije.
+  camera: ^0.11.3
+  # Izbor slike iz galerije.
+  image_picker: ^1.2.2
+  # Render IPS QR koda.
+  qr_flutter: ^4.1.0
+  # Gemini REST API poziv (ekstrakcija podataka sa računa).
+  dio: ^5.9.2
+  # Deljenje QR koda kao slike.
+  share_plus: ^13.2.0
+  # Verzija aplikacije u info sheet-u.
+  package_info_plus: ^10.2.0
+  # Link ka antonijevic.rs.
+  url_launcher: ^6.3.2
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/
+    - assets/images/
