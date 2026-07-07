@@ -38,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   CameraController? _cameraController;
   bool _cameraReady = false;
+  Future<void> _cameraOp = Future.value();
   bool _torchOn = false;
   bool _hasTorch = false;
 
@@ -64,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _sharedPollTimer?.cancel();
     _copiedTimer?.cancel();
-    _stopCamera();
+    _stopCameraQueued();
     super.dispose();
   }
 
@@ -86,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final bytes = await getSharedImage();
       if (bytes != null && mounted) {
-        _stopCamera();
+        _stopCameraQueued();
         setState(() => _image = bytes);
         await _processInvoice(bytes);
       }
@@ -110,7 +111,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _startCamera([CameraRes? res]) async {
+  // Serijalizuje start/stop kamere: sprečava da se novi poziv (npr. brza
+  // promena rezolucije) dispose-uje kontroler dok mu je initialize() još
+  // u toku, što izaziva "used after being disposed" iz camera plugin-a.
+  Future<void> _startCamera([CameraRes? res]) {
+    final op = _cameraOp.then((_) => _startCameraImpl(res));
+    _cameraOp = op;
+    return op;
+  }
+
+  Future<void> _startCameraImpl(CameraRes? res) async {
     try {
       setState(() => _cameraReady = false);
       if (res != null) _resolution = res;
@@ -144,11 +154,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
     } catch (e) {
       debugPrint('Error accessing camera: $e');
+      if (!mounted) return;
       setState(() {
         _error = _t.cameraError;
         _state = AppState.error;
       });
     }
+  }
+
+  // Isto kao _startCamera: sprečava dispose kontrolera dok je start još u toku.
+  Future<void> _stopCameraQueued() {
+    final op = _cameraOp.then((_) => _stopCamera());
+    _cameraOp = op;
+    return op;
   }
 
   Future<void> _stopCamera() async {
@@ -179,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final file = await controller.takePicture();
       final bytes = await file.readAsBytes();
-      await _stopCamera();
+      await _stopCameraQueued();
       if (!mounted) return;
       setState(() => _image = bytes);
       await _processInvoice(bytes);
@@ -251,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _reset() {
-    _stopCamera();
+    _stopCameraQueued();
     setState(() {
       _image = null;
       _invoiceData = null;

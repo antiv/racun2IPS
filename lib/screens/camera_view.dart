@@ -141,11 +141,13 @@ class _CameraViewState extends State<CameraView>
                                 height: 2,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(2),
-                                  gradient: const LinearGradient(colors: [
-                                    Colors.transparent,
-                                    AppColors.emerald400,
-                                    Colors.transparent,
-                                  ]),
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      AppColors.emerald400,
+                                      Colors.transparent,
+                                    ],
+                                  ),
                                   boxShadow: const [
                                     BoxShadow(
                                       color: Color(0x6634D399),
@@ -179,74 +181,79 @@ class _CameraViewState extends State<CameraView>
           Positioned(
             top: topInset + 8,
             left: 10,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _GlassCircleButton(
-                  size: 46,
-                  onTap: () => setState(() => _showResPopup = !_showResPopup),
-                  child: Text(
-                    resShortText(widget.resolution),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+            child: IntrinsicWidth(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _GlassCircleButton(
+                    size: 46,
+                    onTap: () => setState(() => _showResPopup = !_showResPopup),
+                    child: Text(
+                      resShortText(widget.resolution),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
-                ),
-                if (_showResPopup)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.all(8),
-                    constraints: const BoxConstraints(minWidth: 140),
-                    decoration: BoxDecoration(
-                      color: AppColors.stone900.withValues(alpha: 0.96),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white24),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black54,
-                          blurRadius: 20,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final res in CameraRes.values)
-                          Material(
-                            color: res == widget.resolution
-                                ? AppColors.emerald500.withValues(alpha: 0.8)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            child: InkWell(
+                  if (_showResPopup)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(minWidth: 140),
+                      decoration: BoxDecoration(
+                        color: AppColors.stone900.withValues(alpha: 0.96),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white24),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black54,
+                            blurRadius: 20,
+                            offset: Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final res in CameraRes.values)
+                            Material(
+                              color: res == widget.resolution
+                                  ? AppColors.emerald500.withValues(alpha: 0.8)
+                                  : Colors.transparent,
                               borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                setState(() => _showResPopup = false);
-                                widget.onSelectResolution(res);
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 12),
-                                child: Text(
-                                  _resLabel(res),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: res == widget.resolution
-                                        ? Colors.white
-                                        : AppColors.stone300,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () {
+                                  setState(() => _showResPopup = false);
+                                  widget.onSelectResolution(res);
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                  child: Text(
+                                    _resLabel(res),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: res == widget.resolution
+                                          ? Colors.white
+                                          : AppColors.stone300,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
 
@@ -261,7 +268,11 @@ class _CameraViewState extends State<CameraView>
                 _GlassCircleButton(
                   size: 50,
                   onTap: widget.onBack,
-                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                  child: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 34),
                 // Okidač
