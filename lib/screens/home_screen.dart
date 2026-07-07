@@ -7,9 +7,12 @@ import 'package:image_picker/image_picker.dart';
 
 import '../i18n/translations.dart';
 import '../models/invoice_data.dart';
+import '../models/saved_code.dart';
 import '../services/gemini_service.dart';
+import '../services/saved_codes_service.dart';
 import '../services/shared_image.dart';
 import '../theme.dart';
+import '../utils/backup.dart' as backup_utils;
 import '../utils/ips.dart';
 import '../utils/share.dart' as share_utils;
 import '../widgets/info_sheet.dart';
@@ -18,6 +21,7 @@ import 'error_view.dart';
 import 'idle_view.dart';
 import 'processing_view.dart';
 import 'result_view.dart';
+import 'saved_codes_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,6 +39,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _error;
   bool _copied = false;
   Timer? _copiedTimer;
+  // Poruka prikazana u donjem toast-u (kopirano/sačuvano/uvezeno...).
+  String? _toastText;
+  Timer? _toastTimer;
 
   CameraController? _cameraController;
   bool _cameraReady = false;
@@ -45,12 +52,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _sharedPollTimer;
   bool _checkingShared = false;
 
+  final _savedCodesService = SavedCodesService();
+  List<SavedCode> _savedCodes = [];
+  ResultMode _resultMode = ResultMode.payInvoice;
+  // Not null samo kad je ResultView otvoren nad postojećim sačuvanim kodom.
+  String? _editingSavedId;
+
   Translations get _t => translations[_lang]!;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadSavedCodes();
     _checkSharedImage();
     // Android WebView/intent događaji umeju da budu nepouzdani — original
     // koristi polling na 1.5s, zadržavamo isto ponašanje.
@@ -65,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _sharedPollTimer?.cancel();
     _copiedTimer?.cancel();
+    _toastTimer?.cancel();
     _stopCameraQueued();
     super.dispose();
   }
@@ -88,6 +103,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final bytes = await getSharedImage();
       if (bytes != null && mounted) {
         _stopCameraQueued();
+        // Slika deljena iz druge aplikacije je uvek "plati ovaj račun".
+        _resultMode = ResultMode.payInvoice;
+        _editingSavedId = null;
         setState(() => _image = bytes);
         await _processInvoice(bytes);
       }
@@ -247,6 +265,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // --- Akcije ---
 
+  void _showToast(String message) {
+    setState(() => _toastText = message);
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _toastText = null);
+    });
+  }
+
   Future<void> _handleCopy(String text) async {
     final ok = await share_utils.copyToClipboard(text);
     if (ok && mounted) {
@@ -255,6 +281,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _copiedTimer = Timer(const Duration(seconds: 2), () {
         if (mounted) setState(() => _copied = false);
       });
+      _showToast(_t.copied);
     }
   }
 
@@ -262,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final data = _invoiceData;
     if (data == null) return;
     await share_utils.shareQrCode(
-      generateIpsString(data),
+      generateIpsString(data, allowOpenAmount: _resultMode == ResultMode.ownCode),
       _t.title,
       _t.shareDesc,
     );
@@ -270,12 +297,204 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _reset() {
     _stopCameraQueued();
+    // Napuštanje own-code toka (iz bilo kog stanja) vraća na listu sačuvanih
+    // kodova, ne na idle — payInvoice tok se i dalje vraća na idle.
+    final wasOwnCode = _resultMode == ResultMode.ownCode;
     setState(() {
       _image = null;
       _invoiceData = null;
       _error = null;
-      _state = AppState.idle;
+      _editingSavedId = null;
+      _resultMode = ResultMode.payInvoice;
+      _state = wasOwnCode ? AppState.savedList : AppState.idle;
     });
+  }
+
+  // --- Sačuvani IPS kodovi ("IPS pokaži") ---
+
+  Future<void> _loadSavedCodes() async {
+    final codes = await _savedCodesService.loadAll();
+    if (!mounted) return;
+    setState(() => _savedCodes = codes);
+  }
+
+  void _openSavedList() {
+    setState(() => _state = AppState.savedList);
+  }
+
+  void _startInvoiceCamera() {
+    _resultMode = ResultMode.payInvoice;
+    _editingSavedId = null;
+    _startCamera();
+  }
+
+  Future<void> _startInvoiceGallery() {
+    _resultMode = ResultMode.payInvoice;
+    _editingSavedId = null;
+    return _pickFromGallery();
+  }
+
+  void _startOwnCodeCamera() {
+    _resultMode = ResultMode.ownCode;
+    _editingSavedId = null;
+    _startCamera();
+  }
+
+  Future<void> _startOwnCodeGallery() {
+    _resultMode = ResultMode.ownCode;
+    _editingSavedId = null;
+    return _pickFromGallery();
+  }
+
+  void _startManualEntry() {
+    setState(() {
+      _resultMode = ResultMode.ownCode;
+      _editingSavedId = null;
+      _image = null;
+      _invoiceData = InvoiceData();
+      _state = AppState.result;
+    });
+  }
+
+  void _openSavedCode(SavedCode saved) {
+    setState(() {
+      _resultMode = ResultMode.ownCode;
+      _editingSavedId = saved.id;
+      _image = null;
+      _invoiceData = saved.data.copyWith();
+      _state = AppState.result;
+    });
+  }
+
+  Future<void> _saveCurrentCode() async {
+    final data = _invoiceData;
+    if (data == null) return;
+    final editingId = _editingSavedId;
+    if (editingId == null) {
+      await _savedCodesService.add(SavedCode(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        createdAt: DateTime.now(),
+        data: data.copyWith(),
+      ));
+    } else {
+      await _savedCodesService.update(editingId, data.copyWith());
+    }
+    await _loadSavedCodes();
+    if (!mounted) return;
+    _reset();
+  }
+
+  // Čuvanje skeniranog (payInvoice) računa među sačuvane kodove — za razliku
+  // od _saveCurrentCode (ownCode), ostaje na ResultView umesto da resetuje,
+  // jer korisnik možda još želi da podeli/kopira ili skenira sledeći.
+  Future<void> _saveScannedInvoice() async {
+    final data = _invoiceData;
+    if (data == null) return;
+    await _savedCodesService.add(SavedCode(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      createdAt: DateTime.now(),
+      data: data.copyWith(),
+    ));
+    await _loadSavedCodes();
+    if (!mounted) return;
+    _showToast(_t.savedToast);
+  }
+
+  // --- Izvoz/uvoz sačuvanih kodova (nema sopstvenog servera za sync) ---
+
+  Future<void> _exportSavedCodes() async {
+    final json = await _savedCodesService.exportJson();
+    if (!mounted) return;
+    final now = DateTime.now();
+    final stamp = '${now.year}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}';
+    await share_utils.shareJsonBackup(
+      json,
+      'invoice2ips-kodovi-$stamp.json',
+      _t.exportCodes,
+      _t.exportShareDesc,
+    );
+  }
+
+  Future<void> _importSavedCodes() async {
+    final raw = await backup_utils.pickJsonBackupContent();
+    if (raw == null || !mounted) return;
+    try {
+      final count = await _savedCodesService.importMerge(raw);
+      await _loadSavedCodes();
+      if (!mounted) return;
+      _showToast('${_t.importSuccessPrefix}$count');
+    } catch (e) {
+      debugPrint('Import error: $e');
+      if (!mounted) return;
+      _showToast(_t.importErrorToast);
+    }
+  }
+
+  Future<void> _deleteSavedCode(String id) async {
+    await _savedCodesService.delete(id);
+    await _loadSavedCodes();
+  }
+
+  Future<void> _deleteCurrentAndReturn() async {
+    final id = _editingSavedId;
+    if (id == null) return;
+    await _deleteSavedCode(id);
+    if (!mounted) return;
+    _reset();
+  }
+
+  void _showAddOwnCodeSheet() {
+    final t = _t;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 38,
+              height: 5,
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              decoration: BoxDecoration(
+                color: AppColors.stone200,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(t.addViaCamera),
+              onTap: () {
+                Navigator.of(context).pop();
+                _startOwnCodeCamera();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.file_upload_outlined),
+              title: Text(t.addViaGallery),
+              onTap: () {
+                Navigator.of(context).pop();
+                _startOwnCodeGallery();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_note),
+              title: Text(t.addViaManual),
+              onTap: () {
+                Navigator.of(context).pop();
+                _startManualEntry();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showImagePreview() {
@@ -335,6 +554,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final t = _t;
+    final toastMessage = _toastText;
     return Scaffold(
       backgroundColor: AppColors.stone50,
       body: GestureDetector(
@@ -372,18 +592,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                     ],
                   ),
-                  // Toast za kopiranje
+                  // Toast za kopiranje/čuvanje
                   Positioned(
                     left: 16,
                     right: 16,
                     bottom: 24,
                     child: IgnorePointer(
                       child: AnimatedSlide(
-                        offset: _copied ? Offset.zero : const Offset(0, 0.4),
+                        offset: toastMessage != null
+                            ? Offset.zero
+                            : const Offset(0, 0.4),
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOut,
                         child: AnimatedOpacity(
-                          opacity: _copied ? 1 : 0,
+                          opacity: toastMessage != null ? 1 : 0,
                           duration: const Duration(milliseconds: 250),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -411,7 +633,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    t.copied,
+                                    toastMessage ?? '',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 14,
@@ -503,7 +725,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-          // Desni deo: info, jezik, reset
+          // Desni deo: info, jezik, sačuvani kodovi/nazad
           _HeaderIconButton(
             icon: Icons.info_outline,
             tooltip: t.infoTitle,
@@ -555,13 +777,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-          if (_state != AppState.idle) ...[
-            const SizedBox(width: 8),
-            _HeaderIconButton(icon: Icons.refresh, onTap: _reset),
-          ],
+          const SizedBox(width: 8),
+          _state == AppState.idle
+              ? _HeaderIconButton(
+                  icon: Icons.qr_code_2,
+                  tooltip: t.savedCodesTitle,
+                  onTap: _openSavedList,
+                )
+              : _HeaderIconButton(icon: _headerSecondaryIcon, onTap: _reset),
         ],
       ),
     );
+  }
+
+  IconData get _headerSecondaryIcon {
+    if (_state == AppState.savedList) return Icons.close;
+    if (_resultMode == ResultMode.ownCode) return Icons.arrow_back;
+    return Icons.refresh;
   }
 
   Widget _buildBody(Translations t) {
@@ -570,8 +802,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return IdleView(
           key: const ValueKey('idle'),
           t: t,
-          onOpenCamera: _startCamera,
-          onPickGallery: _pickFromGallery,
+          onOpenCamera: _startInvoiceCamera,
+          onPickGallery: _startInvoiceGallery,
         );
       case AppState.capturing:
         return CameraView(
@@ -600,6 +832,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           data: _invoiceData!,
           copied: _copied,
           image: _image,
+          mode: _resultMode,
+          isEditingExisting: _editingSavedId != null,
+          onSave: _resultMode == ResultMode.ownCode ? _saveCurrentCode : null,
+          onDelete: _editingSavedId != null ? _deleteCurrentAndReturn : null,
+          onSaveScanned:
+              _resultMode == ResultMode.payInvoice ? _saveScannedInvoice : null,
           onChanged: () => setState(() {}),
           onCopy: _handleCopy,
           onShare: _handleShare,
@@ -612,6 +850,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           t: t,
           message: _error,
           onRetry: _reset,
+        );
+      case AppState.savedList:
+        return SavedCodesView(
+          key: const ValueKey('savedList'),
+          t: t,
+          codes: _savedCodes,
+          onOpen: _openSavedCode,
+          onDelete: _deleteSavedCode,
+          onAddPressed: _showAddOwnCodeSheet,
+          onExport: _exportSavedCodes,
+          onImport: _importSavedCodes,
         );
     }
   }

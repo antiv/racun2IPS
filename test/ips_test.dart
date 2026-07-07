@@ -73,5 +73,24 @@ void main() {
       expect(ips, contains('SF:289'));
       expect(ips, isNot(contains('RO:')));
     });
+
+    test('bez allowOpenAmount, nulti iznos i dalje piše RSD0,00', () {
+      final data = InvoiceData(
+        recipientName: 'Moja Firma',
+        accountNumber: '840000071117184384',
+        amount: 0,
+      );
+      expect(generateIpsString(data), contains('I:RSD0,00'));
+    });
+
+    test('sa allowOpenAmount, nulti iznos daje otvoren iznos (bez cifara)', () {
+      final data = InvoiceData(
+        recipientName: 'Moja Firma',
+        accountNumber: '840000071117184384',
+        amount: 0,
+      );
+      final ips = generateIpsString(data, allowOpenAmount: true);
+      expect(ips, contains('I:RSD|'));
+    });
   });
 }

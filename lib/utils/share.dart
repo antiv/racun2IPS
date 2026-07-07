@@ -63,3 +63,23 @@ Future<void> shareQrCode(String ipsString, String title, String description) asy
     text: description,
   ));
 }
+
+/// Upisuje [content] u privremeni .json fajl i otvara sistemski share
+/// dijalog — koristi se za izvoz sačuvanih IPS kodova radi prenosa na
+/// drugi uređaj (nema sopstvenog servera za sinhronizaciju).
+Future<void> shareJsonBackup(
+  String content,
+  String fileName,
+  String subject,
+  String text,
+) async {
+  final dir = await getTemporaryDirectory();
+  final file = File('${dir.path}/$fileName');
+  await file.writeAsString(content);
+
+  await SharePlus.instance.share(ShareParams(
+    files: [XFile(file.path, mimeType: 'application/json')],
+    subject: subject,
+    text: text,
+  ));
+}

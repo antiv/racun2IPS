@@ -71,8 +71,18 @@ bool validateReferenceNumber(String ref) {
 /// Format: K:[TYPE]|V:01|C:1|R:[Račun]|N:[Primalac]|I:RSD[Iznos]|SF:[Šifra]|S:[Svrha]|RO:[Poziv]
 ///
 /// [type]: PR = Plaćanje Računa (standardni QR), EK = Elektronska Kupovina.
-String generateIpsString(InvoiceData data, {String type = 'PR'}) {
-  final formattedAmount = 'RSD${data.amount.toStringAsFixed(2).replaceAll('.', ',')}';
+/// [allowOpenAmount]: kod ličnog IPS koda ("IPS pokaži") iznos je opcion —
+/// kad je 0/negativan, izostavlja se cifra iznosa (I:RSD bez broja) da
+/// platilac sam unese koliko šalje. Podrazumevano isključeno da postojeći
+/// tok plaćanja tuđeg računa (gde je iznos > 0 uvek obavezan) ostane isti.
+String generateIpsString(
+  InvoiceData data, {
+  String type = 'PR',
+  bool allowOpenAmount = false,
+}) {
+  final formattedAmount = (allowOpenAmount && data.amount <= 0)
+      ? 'RSD'
+      : 'RSD${data.amount.toStringAsFixed(2).replaceAll('.', ',')}';
   var cleanAccount = data.accountNumber.replaceAll(RegExp(r'[^0-9]'), '');
   if (cleanAccount.length > IpsLimits.r) {
     cleanAccount = cleanAccount.substring(0, IpsLimits.r);
