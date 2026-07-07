@@ -43,6 +43,31 @@ class Translations {
     required this.resMax,
     required this.viewInvoice,
     required this.invalidFormNote,
+    required this.savedCodesTitle,
+    required this.searchHint,
+    required this.noSavedCodesTitle,
+    required this.noSavedCodesDesc,
+    required this.noSearchResults,
+    required this.addNew,
+    required this.addViaCamera,
+    required this.addViaGallery,
+    required this.addViaManual,
+    required this.save,
+    required this.update,
+    required this.delete,
+    required this.cancel,
+    required this.confirmDeleteTitle,
+    required this.confirmDeleteMessage,
+    required this.openAmountLabel,
+    required this.openAmountHint,
+    required this.ownCodeBannerTitle,
+    required this.ownCodeInstruction,
+    required this.savedToast,
+    required this.exportCodes,
+    required this.importCodes,
+    required this.exportShareDesc,
+    required this.importSuccessPrefix,
+    required this.importErrorToast,
   });
 
   final String title;
@@ -86,6 +111,31 @@ class Translations {
   final String resMax;
   final String viewInvoice;
   final String invalidFormNote;
+  final String savedCodesTitle;
+  final String searchHint;
+  final String noSavedCodesTitle;
+  final String noSavedCodesDesc;
+  final String noSearchResults;
+  final String addNew;
+  final String addViaCamera;
+  final String addViaGallery;
+  final String addViaManual;
+  final String save;
+  final String update;
+  final String delete;
+  final String cancel;
+  final String confirmDeleteTitle;
+  final String confirmDeleteMessage;
+  final String openAmountLabel;
+  final String openAmountHint;
+  final String ownCodeBannerTitle;
+  final String ownCodeInstruction;
+  final String savedToast;
+  final String exportCodes;
+  final String importCodes;
+  final String exportShareDesc;
+  final String importSuccessPrefix;
+  final String importErrorToast;
 }
 
 const translations = <Language, Translations>{
@@ -142,6 +192,35 @@ const translations = <Language, Translations>{
     viewInvoice: 'Pogledaj skeniran račun',
     invalidFormNote:
         'Popunite i ispravite sva obavezna polja označena crvenom bojom da bi QR kod bio validan.',
+    savedCodesTitle: 'Sačuvani kodovi',
+    searchHint: 'Pretraga po primaocu, računu ili svrsi',
+    noSavedCodesTitle: 'Nemate sačuvanih kodova',
+    noSavedCodesDesc:
+        'Napravite svoj IPS kod da vam neko drugi uplati na račun.',
+    noSearchResults: 'Nema rezultata za ovu pretragu',
+    addNew: 'Dodaj novi kod',
+    addViaCamera: 'Skeniraj kamerom',
+    addViaGallery: 'Izaberi iz galerije',
+    addViaManual: 'Unesi ručno',
+    save: 'Sačuvaj',
+    update: 'Ažuriraj',
+    delete: 'Obriši',
+    cancel: 'Otkaži',
+    confirmDeleteTitle: 'Obrisati kod?',
+    confirmDeleteMessage: 'Ova radnja se ne može poništiti.',
+    openAmountLabel: 'Otvoren iznos',
+    openAmountHint:
+        'Ostavite prazno za otvoren iznos — platilac sam unosi koliko šalje.',
+    ownCodeBannerTitle: 'Vaš IPS kod',
+    ownCodeInstruction:
+        'Pokažite ovaj kod drugoj osobi da ga skenira svojom bankarskom aplikacijom i uplati vama.',
+    savedToast: 'Kod je sačuvan',
+    exportCodes: 'Izvezi kodove',
+    importCodes: 'Uvezi kodove',
+    exportShareDesc:
+        'Fajl sa sačuvanim IPS kodovima — sačuvajte ga ili ga uvezite na drugom uređaju.',
+    importSuccessPrefix: 'Uvezeno novih kodova: ',
+    importErrorToast: 'Uvoz nije uspeo — proverite da li je fajl ispravan.',
   ),
   Language.en: Translations(
     title: 'Invoice2IPS',
@@ -194,6 +273,33 @@ const translations = <Language, Translations>{
     resMax: 'Maximum (4K)',
     viewInvoice: 'View scanned invoice',
     invalidFormNote:
-        'Popunite i ispravite sva obavezna polja označena crvenom bojom da bi QR kod bio validan.',
+        'Fill in and correct all required fields marked in red for the QR code to be valid.',
+    savedCodesTitle: 'Saved codes',
+    searchHint: 'Search by recipient, account or purpose',
+    noSavedCodesTitle: 'No saved codes yet',
+    noSavedCodesDesc: 'Create your own IPS code so someone can pay you.',
+    noSearchResults: 'No results for this search',
+    addNew: 'Add new code',
+    addViaCamera: 'Scan with camera',
+    addViaGallery: 'Choose from gallery',
+    addViaManual: 'Enter manually',
+    save: 'Save',
+    update: 'Update',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    confirmDeleteTitle: 'Delete this code?',
+    confirmDeleteMessage: 'This action cannot be undone.',
+    openAmountLabel: 'Open amount',
+    openAmountHint: 'Leave blank for an open amount — the payer enters it.',
+    ownCodeBannerTitle: 'Your IPS code',
+    ownCodeInstruction:
+        'Show this code to someone else to scan with their banking app and pay you.',
+    savedToast: 'Code saved',
+    exportCodes: 'Export codes',
+    importCodes: 'Import codes',
+    exportShareDesc:
+        'A file with your saved IPS codes — save it or import it on another device.',
+    importSuccessPrefix: 'New codes imported: ',
+    importErrorToast: 'Import failed — check that the file is valid.',
   ),
 };

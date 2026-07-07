@@ -11,7 +11,8 @@ import '../widgets/editable_row.dart';
 import '../widgets/editable_select_row.dart';
 
 /// Ekran rezultata: banner, QR kartica sa kopiranjem/deljenjem,
-/// editabilna polja sa validacijom, dugme "Skeniraj sledeći".
+/// editabilna polja sa validacijom, dugme "Skeniraj sledeći" (payInvoice)
+/// ili "Sačuvaj"/"Ažuriraj"/"Obriši" (ownCode).
 class ResultView extends StatelessWidget {
   const ResultView({
     super.key,
@@ -23,6 +24,11 @@ class ResultView extends StatelessWidget {
     required this.onShare,
     required this.onReset,
     required this.onViewImage,
+    required this.mode,
+    this.isEditingExisting = false,
+    this.onSave,
+    this.onDelete,
+    this.onSaveScanned,
     this.image,
   });
 
@@ -35,13 +41,22 @@ class ResultView extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onReset;
   final VoidCallback onViewImage;
+  final ResultMode mode;
+  final bool isEditingExisting;
+  // Suvišni u payInvoice modu, pa ostaju nullable za razliku od ostatka fajla.
+  final VoidCallback? onSave;
+  final VoidCallback? onDelete;
+  // Čuvanje skeniranog (payInvoice) računa među sačuvane kodove — nezavisno
+  // od onSave (koje se koristi za Sačuvaj/Ažuriraj u ownCode modu).
+  final VoidCallback? onSaveScanned;
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    final isOwnCode = mode == ResultMode.ownCode;
     final isAccountValid = validateAccountNumber(data.accountNumber);
-    final isAmountValid = data.amount > 0;
+    final isAmountValid = isOwnCode ? data.amount >= 0 : data.amount > 0;
     final isRecipientValid = data.recipientName.trim().isNotEmpty &&
         data.recipientName.length <= IpsLimits.n;
     final isPurposeValid = data.purpose.isEmpty || data.purpose.length <= IpsLimits.s;
@@ -62,7 +77,7 @@ class ResultView extends StatelessWidget {
         isSfValid &&
         !hasPipe;
 
-    final ipsString = generateIpsString(data);
+    final ipsString = generateIpsString(data, allowOpenAmount: isOwnCode);
 
     return Column(
       children: [
@@ -79,12 +94,17 @@ class ResultView extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_circle_outline,
-                        size: 22, color: AppColors.emerald700),
+                    Icon(
+                      isOwnCode
+                          ? Icons.qr_code_2
+                          : Icons.check_circle_outline,
+                      size: 22,
+                      color: AppColors.emerald700,
+                    ),
                     const SizedBox(width: 11),
                     Expanded(
                       child: Text(
-                        t.extracted,
+                        isOwnCode ? t.ownCodeBannerTitle : t.extracted,
                         style: const TextStyle(
                           fontSize: 14.5,
                           fontWeight: FontWeight.w600,
@@ -197,6 +217,17 @@ class ResultView extends StatelessWidget {
                                     label: t.share,
                                   ),
                                 ),
+                                if (onSaveScanned != null) ...[
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _QrActionButton(
+                                      onTap: onSaveScanned!,
+                                      icon: Icons.bookmark_add_outlined,
+                                      iconColor: AppColors.stone600,
+                                      label: t.save,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ],
@@ -262,6 +293,7 @@ class ResultView extends StatelessWidget {
                       value: data.accountNumber,
                       isMono: true,
                       error: !isAccountValid,
+                      keyboardType: TextInputType.number,
                       onChanged: (val) {
                         data.accountNumber = parseAccountNumber(val);
                         onChanged();
@@ -277,6 +309,17 @@ class ResultView extends StatelessWidget {
                         onChanged();
                       },
                     ),
+                    if (isOwnCode)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 11),
+                        child: Text(
+                          t.openAmountHint,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.stone400,
+                          ),
+                        ),
+                      ),
                     const _RowDivider(),
                     EditableSelectRow(
                       label: t.paymentCode,
@@ -319,7 +362,7 @@ class ResultView extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Text(
-                  t.scanInstruction,
+                  isOwnCode ? t.ownCodeInstruction : t.scanInstruction,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 12,
@@ -342,25 +385,89 @@ class ResultView extends StatelessWidget {
               colors: [AppColors.stone50, Color(0x00FAFAF9)],
             ),
           ),
-          child: SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton(
-              onPressed: onReset,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.stone900,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              child: Text(t.scanAnother),
-            ),
-          ),
+          child: !isOwnCode
+              ? SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: FilledButton(
+                    onPressed: onReset,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.stone900,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: Text(t.scanAnother),
+                  ),
+                )
+              : isEditingExisting
+                  ? SizedBox(
+                      height: 54,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: onDelete,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.red600,
+                                side:
+                                    const BorderSide(color: AppColors.red400),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              child: Text(t.delete),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton(
+                              onPressed: isFormValid ? onSave : null,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.stone900,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              child: Text(t.update),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: FilledButton(
+                        onPressed: isFormValid ? onSave : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.stone900,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: Text(t.save),
+                      ),
+                    ),
         ),
       ],
     );
@@ -499,7 +606,7 @@ class _QrActionButton extends StatelessWidget {
           backgroundColor: AppColors.stone50,
           foregroundColor: AppColors.stone600,
           side: const BorderSide(color: AppColors.stone100),
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -509,12 +616,17 @@ class _QrActionButton extends StatelessWidget {
           children: [
             Icon(icon, size: 15, color: iconColor),
             const SizedBox(width: 7),
-            Text(
-              label.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.48,
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.48,
+                  ),
+                ),
               ),
             ),
           ],

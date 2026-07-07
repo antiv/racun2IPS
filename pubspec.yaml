@@ -28,6 +28,13 @@ dependencies:
   # Link ka antonijevic.rs.
   url_launcher: ^6.3.2
   path_provider: ^2.1.5
+  # Lokalno čuvanje sačuvanih IPS kodova.
+  shared_preferences: ^2.5.5
+  # Izbor .json fajla za uvoz sačuvanih kodova (export ide preko share_plus).
+  # 12.0.0-beta jer stabilni 11.x still cilja win32 ^5.x, što je u sukobu sa
+  # package_info_plus (win32 ^6.x); Windows deo se i onda kompajlira kao deo
+  # kernel snapshot-a čak i za iOS/Android build, pa override verzije ne radi.
+  file_picker: ^12.0.0-beta.7
 
 dev_dependencies:
   flutter_test:

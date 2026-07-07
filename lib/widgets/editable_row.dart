@@ -13,6 +13,7 @@ class EditableRow extends StatefulWidget {
     this.isMono = false,
     this.error = false,
     this.maxLength,
+    this.keyboardType,
   });
 
   final String label;
@@ -21,6 +22,7 @@ class EditableRow extends StatefulWidget {
   final bool isMono;
   final bool error;
   final int? maxLength;
+  final TextInputType? keyboardType;
 
   @override
   State<EditableRow> createState() => _EditableRowState();
@@ -89,6 +91,7 @@ class _EditableRowState extends State<EditableRow> {
           TextField(
             controller: _controller,
             onChanged: widget.onChanged,
+            keyboardType: widget.keyboardType,
             decoration: const InputDecoration(
               isDense: true,
               border: InputBorder.none,
