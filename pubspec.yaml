@@ -14,7 +14,7 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   # Kamera: preview, fotografisanje, lampa (torch), izbor rezolucije.
-  camera: ^0.11.3
+  camera: ^0.12.0
   # Izbor slike iz galerije.
   image_picker: ^1.2.2
   # Render IPS QR koda.

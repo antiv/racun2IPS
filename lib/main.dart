@@ -15,6 +15,8 @@ void main() {
   // event za isti (recikliran) camera id (npr. "no flash unit" pri paljenju
   // baterije). Ne utiče na rad aplikacije, ali bez ovoga se u release build-u
   // beleži kao crash. https://github.com/flutter/flutter/issues/184959
+  // camera 0.12.0+2 tvrdi da je ovo popravljeno; guard ostaje kao pojas i
+  // tregeri dok se ne potvrdi na terenu, pa se može ukloniti.
   PlatformDispatcher.instance.onError = (error, stack) {
     if (error is FlutterError &&
         error.toString().contains('CameraController') &&
