@@ -4,11 +4,13 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:in_app_review/in_app_review.dart';
 
 import '../i18n/translations.dart';
 import '../models/invoice_data.dart';
 import '../models/saved_code.dart';
 import '../services/gemini_service.dart';
+import '../services/review_service.dart';
 import '../services/saved_codes_service.dart';
 import '../services/shared_image.dart';
 import '../theme.dart';
@@ -16,6 +18,7 @@ import '../utils/backup.dart' as backup_utils;
 import '../utils/ips.dart';
 import '../utils/share.dart' as share_utils;
 import '../widgets/info_sheet.dart';
+import '../widgets/review_sheet.dart';
 import 'camera_view.dart';
 import 'error_view.dart';
 import 'idle_view.dart';
@@ -53,6 +56,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _checkingShared = false;
 
   final _savedCodesService = SavedCodesService();
+  final _reviewService = ReviewService();
+  // True kad je dostignut prag skeniranih računa, a ponuda za ocenjivanje
+  // čeka da korisnik napusti ekran rezultata (da ne prekriva QR kod).
+  bool _reviewPending = false;
+
   List<SavedCode> _savedCodes = [];
   ResultMode _resultMode = ResultMode.payInvoice;
   // Not null samo kad je ResultView otvoren nad postojećim sačuvanim kodom.
@@ -246,6 +254,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _invoiceData = data;
         _state = AppState.result;
       });
+      // Broje se samo skenirani računi — pravljenje sopstvenog IPS koda nije
+      // skeniranje računa. Ne ide kroz setState, polje ne utiče na render.
+      if (_resultMode == ResultMode.payInvoice) {
+        _reviewPending = await _reviewService.registerScan();
+      }
     } catch (e) {
       debugPrint('Processing error: $e');
       if (!mounted) return;
@@ -300,6 +313,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Napuštanje own-code toka (iz bilo kog stanja) vraća na listu sačuvanih
     // kodova, ne na idle — payInvoice tok se i dalje vraća na idle.
     final wasOwnCode = _resultMode == ResultMode.ownCode;
+    final fromResult = _state == AppState.result;
     setState(() {
       _image = null;
       _invoiceData = null;
@@ -308,6 +322,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _resultMode = ResultMode.payInvoice;
       _state = wasOwnCode ? AppState.savedList : AppState.idle;
     });
+    if (_reviewPending && fromResult && !wasOwnCode) {
+      _reviewPending = false;
+      // Sačekaj da AnimatedSwitcher (360ms) završi prelaz na idle.
+      Future.delayed(const Duration(milliseconds: 420), _showReviewPrompt);
+    }
+  }
+
+  /// Nudi ocenjivanje aplikacije: prvo naš sheet, pa tek na potvrdu native
+  /// prompt prodavnice — da se Play-ov ograničen broj prompt-a ne troši
+  /// na korisnike koji ionako ne bi ocenili.
+  Future<void> _showReviewPrompt() async {
+    if (!mounted) return;
+    // Flag se upisuje pre prikaza — pitamo tačno jednom, bez obzira na izbor.
+    await _reviewService.markPrompted();
+    if (!mounted) return;
+    final wantsToRate = await showReviewSheet(context, _t);
+    if (wantsToRate != true) return;
+    final review = InAppReview.instance;
+    if (await review.isAvailable()) {
+      await review.requestReview();
+    }
   }
 
   // --- Sačuvani IPS kodovi ("IPS pokaži") ---

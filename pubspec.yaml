@@ -35,6 +35,8 @@ dependencies:
   # package_info_plus (win32 ^6.x); Windows deo se i onda kompajlira kao deo
   # kernel snapshot-a čak i za iOS/Android build, pa override verzije ne radi.
   file_picker: ^12.0.0-beta.7
+  # Native prompt za ocenjivanje (Play In-App Review / SKStoreReviewController).
+  in_app_review: ^2.0.12
 
 dev_dependencies:
   flutter_test:
