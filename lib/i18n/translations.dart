@@ -68,6 +68,10 @@ class Translations {
     required this.exportShareDesc,
     required this.importSuccessPrefix,
     required this.importErrorToast,
+    required this.reviewTitle,
+    required this.reviewMessage,
+    required this.reviewRate,
+    required this.reviewLater,
   });
 
   final String title;
@@ -136,6 +140,10 @@ class Translations {
   final String exportShareDesc;
   final String importSuccessPrefix;
   final String importErrorToast;
+  final String reviewTitle;
+  final String reviewMessage;
+  final String reviewRate;
+  final String reviewLater;
 }
 
 const translations = <Language, Translations>{
@@ -221,6 +229,11 @@ const translations = <Language, Translations>{
         'Fajl sa sačuvanim IPS kodovima — sačuvajte ga ili ga uvezite na drugom uređaju.',
     importSuccessPrefix: 'Uvezeno novih kodova: ',
     importErrorToast: 'Uvoz nije uspeo — proverite da li je fajl ispravan.',
+    reviewTitle: 'Da li vam se sviđa Invoice2IPS?',
+    reviewMessage:
+        'Ocena u prodavnici aplikacija mnogo znači i pomaže drugima da pronađu aplikaciju.',
+    reviewRate: 'Oceni aplikaciju',
+    reviewLater: 'Možda kasnije',
   ),
   Language.en: Translations(
     title: 'Invoice2IPS',
@@ -301,5 +314,10 @@ const translations = <Language, Translations>{
         'A file with your saved IPS codes — save it or import it on another device.',
     importSuccessPrefix: 'New codes imported: ',
     importErrorToast: 'Import failed — check that the file is valid.',
+    reviewTitle: 'Enjoying Invoice2IPS?',
+    reviewMessage:
+        'A rating in the app store means a lot and helps others discover the app.',
+    reviewRate: 'Rate the app',
+    reviewLater: 'Maybe later',
   ),
 };
