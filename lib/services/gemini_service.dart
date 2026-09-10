@@ -1,14 +1,34 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io' show Platform;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 
 import '../constants/ips.dart';
 import '../models/invoice_data.dart';
 import '../utils/ips.dart';
 
-/// API ključ se prosleđuje pri build-u: --dart-define-from-file=.env
-const _apiKey = String.fromEnvironment('GEMINI_API_KEY');
+/// API ključevi se prosleđuju pri build-u: --dart-define-from-file=.env
+/// Nezavisni ključevi za Android i iOS omogućavaju restrikciju na nivou platforme
+/// (Package Name + SHA-1 za Android, Bundle ID za iOS).
+const _apiKeyAndroid = String.fromEnvironment('GEMINI_API_KEY_ANDROID');
+const _apiKeyIos = String.fromEnvironment('GEMINI_API_KEY_IOS');
+const _apiKeyFallback = String.fromEnvironment('GEMINI_API_KEY');
+
+const _appPackageName = 'rs.antonijevic.invoice2ips';
+const _channel = MethodChannel('rs.antonijevic.invoice2ips/shared');
+
+String? _cachedAndroidCertSha1;
+
+String get _apiKey {
+  if (Platform.isAndroid && _apiKeyAndroid.isNotEmpty) {
+    return _apiKeyAndroid;
+  }
+  if (Platform.isIOS && _apiKeyIos.isNotEmpty) {
+    return _apiKeyIos;
+  }
+  return _apiKeyFallback;
+}
 
 const _prompt = '''Extract invoice details for a Serbian NBS IPS payment.
       Look for:
@@ -25,8 +45,35 @@ const _prompt = '''Extract invoice details for a Serbian NBS IPS payment.
 /// prikaže inline validacione greške.
 /// Baca [Exception] sa "429"/"Quota exceeded" u poruci kod prekoračenja kvote.
 Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
-  if (_apiKey.isEmpty) {
-    throw Exception('Gemini API key is missing.');
+  final apiKey = _apiKey;
+  if (apiKey.isEmpty) {
+    final keyName = Platform.isAndroid
+        ? 'GEMINI_API_KEY_ANDROID (ili GEMINI_API_KEY)'
+        : Platform.isIOS
+            ? 'GEMINI_API_KEY_IOS (ili GEMINI_API_KEY)'
+            : 'GEMINI_API_KEY';
+    throw Exception('Gemini API ključ nedostaje ($keyName).');
+  }
+
+  // Zaglavlja za zaštitu API ključa po platformi (Google Cloud Application Restrictions):
+  // - Android: X-Android-Package i X-Android-Cert (SHA-1 potpis sertifikata)
+  // - iOS: X-Ios-Bundle-Identifier
+  final headers = <String, String>{};
+  if (Platform.isAndroid) {
+    headers['X-Android-Package'] = _appPackageName;
+    if (_cachedAndroidCertSha1 == null) {
+      try {
+        _cachedAndroidCertSha1 =
+            await _channel.invokeMethod<String>('getAppSignatureSha1');
+      } catch (_) {}
+    }
+    final certSha1 =
+        _cachedAndroidCertSha1 ?? '86262C6ACC0D30A1B6B45375D520F8CA5E409794';
+    if (certSha1.isNotEmpty) {
+      headers['X-Android-Cert'] = certSha1;
+    }
+  } else if (Platform.isIOS) {
+    headers['X-Ios-Bundle-Identifier'] = _appPackageName;
   }
 
   final dio = Dio();
@@ -34,7 +81,8 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
   try {
     response = await dio.post<Map<String, dynamic>>(
       'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent',
-      queryParameters: {'key': _apiKey},
+      queryParameters: {'key': apiKey},
+      options: Options(headers: headers),
       data: {
         'contents': [
           {

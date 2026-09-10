@@ -1,11 +1,14 @@
 package rs.antonijevic.invoice2ips
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.security.MessageDigest
 
 /**
  * Prijem slike podeljene iz druge aplikacije (ACTION_SEND, mime "image").
@@ -30,8 +33,37 @@ class MainActivity : FlutterActivity() {
                     result.success(sharedImage)
                     sharedImage = null
                 }
+                "getAppSignatureSha1" -> {
+                    result.success(getAppSignatureSha1())
+                }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun getAppSignatureSha1(): String? {
+        return try {
+            val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val packageInfo = packageManager.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                )
+                packageInfo.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                val packageInfo = packageManager.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_SIGNATURES
+                )
+                @Suppress("DEPRECATION")
+                packageInfo.signatures
+            }
+            val cert = signatures?.firstOrNull()?.toByteArray() ?: return null
+            val md = MessageDigest.getInstance("SHA-1")
+            val digest = md.digest(cert)
+            digest.joinToString("") { "%02X".format(it) }
+        } catch (_: Exception) {
+            null
         }
     }
 
