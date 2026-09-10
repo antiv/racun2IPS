@@ -42,7 +42,7 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
               {'text': _prompt},
               {
                 'inlineData': {
-                  'mimeType': 'image/jpeg',
+                  'mimeType': _detectMimeType(imageBytes),
                   'data': base64Encode(imageBytes),
                 }
               },
@@ -72,6 +72,13 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
   } on DioException catch (e) {
     if (e.response?.statusCode == 429) {
       throw Exception('Quota exceeded (429)');
+    }
+    final data = e.response?.data;
+    if (data is Map && data['error'] is Map) {
+      final error = data['error'] as Map;
+      final message = error['message'] as String? ?? 'Nepoznata greška';
+      final status = error['status'] as String? ?? '';
+      throw Exception('Gemini API greška ($status): $message');
     }
     rethrow;
   }
@@ -119,4 +126,33 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
   }
 
   return data;
+}
+
+/// Određuje MIME tip slike na osnovu potpisa (magic bytes).
+String _detectMimeType(Uint8List bytes) {
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xFF &&
+      bytes[1] == 0xD8 &&
+      bytes[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4E &&
+      bytes[3] == 0x47) {
+    return 'image/png';
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x46 &&
+      bytes[8] == 0x57 &&
+      bytes[9] == 0x45 &&
+      bytes[10] == 0x42 &&
+      bytes[11] == 0x50) {
+    return 'image/webp';
+  }
+  return 'image/jpeg';
 }
