@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
 # deploy.sh — podiže verziju, bilduje release artefakt i kopira ga u root projekta.
+# deploy.sh — podiže verziju, bilduje release artefakt i kopira ga u root projekta,
+# uz opcioni automatski upload AAB paketa na Google Play Console.
 #
 # Podrazumevano: AAB (za Play Store), uz bump verzije (patch + build broj).
 #   pubspec  version: X.Y.Z+N  ->  X.Y.(Z+1)+(N+1)
@@ -9,8 +11,12 @@
 # Upotreba:
 #   ./deploy.sh                 # AAB, sa bump-om verzije
 #   ./deploy.sh apk             # APK umesto AAB
+#   ./deploy.sh                 # AAB, sa bump-om verzije (samo lokalni build)
+#   ./deploy.sh --upload        # AAB, bump verzije + upload na Google Play
+#   ./deploy.sh apk             # APK umesto AAB (bez uploada)
 #   ./deploy.sh --no-bump       # bez podizanja verzije
 #   ./deploy.sh apk --no-bump   # APK, bez bump-a (flegovi bilo kojim redosledom)
+#   ./deploy.sh --upload --no-bump # upload bez podizanja verzije
 #
 set -euo pipefail
 
@@ -19,32 +25,74 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 PUBSPEC="pubspec.yaml"
+ENV_FILE="android/deploy.env"
+PLAY_UPLOAD="tool/play_upload.py"
+PACKAGE="rs.antonijevic.invoice2ips"
 
 # --- Parsiranje argumenata (flegovi, bilo kojim redosledom) ---
 FORMAT="aab"
 BUMP=true
+UPLOAD=false
 for arg in "$@"; do
   case "$arg" in
     apk)        FORMAT="apk" ;;
     aab)        FORMAT="aab" ;;
     --no-bump)  BUMP=false ;;
+    apk)          FORMAT="apk" ;;
+    aab)          FORMAT="aab" ;;
+    --upload)     UPLOAD=true ;;
+    --no-upload)  UPLOAD=false ;;
+    --no-bump)    BUMP=false ;;
     -h|--help)
       sed -n '10,16p' "$0" | sed 's/^#[[:space:]]\{0,1\}//'
+      sed -n '10,15p' "$0" | sed 's/^#[[:space:]]\{0,1\}//'
       exit 0 ;;
     *)
       echo "Nepoznat argument: $arg" >&2
       echo "Dozvoljeno: apk | aab | --no-bump | --help" >&2
+      echo "Dozvoljeno: apk | aab | --upload | --no-upload | --no-bump | --help" >&2
       exit 64 ;;
   esac
 done
 
 # --- FVM Flutter (sve komande kroz FVM, po konvenciji projekta) ---
+export PATH="/opt/homebrew/bin:$PATH"
 FLUTTER="fvm flutter"
 
 # --- GEMINI_API_KEY iz .env (obavezan za AI ekstrakciju) ---
 if [[ ! -f ".env" ]]; then
   echo "Nedostaje .env sa GEMINI_API_KEY — kopiraj .env.example i popuni." >&2
   exit 1
+fi
+
+# --- Pre-flight provere za Google Play upload ---
+if $UPLOAD; then
+  if [[ "$FORMAT" != "aab" ]]; then
+    echo "Greška: Google Play upload podržava samo AAB format (izabran je $FORMAT)." >&2
+    exit 1
+  fi
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "Nedostaje $ENV_FILE — kopiraj android/deploy.env.example i popuni." >&2
+    exit 1
+  fi
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  if [[ -z "${PLAY_SERVICE_ACCOUNT_JSON:-}" ]]; then
+    echo "PLAY_SERVICE_ACCOUNT_JSON nije postavljen u $ENV_FILE" >&2
+    exit 1
+  fi
+  if [[ ! -f "$PLAY_SERVICE_ACCOUNT_JSON" ]]; then
+    echo "JSON ključ servisnog naloga nije pronađen na putanji: $PLAY_SERVICE_ACCOUNT_JSON" >&2
+    exit 1
+  fi
+  if ! python3 -c 'import googleapiclient, google.oauth2' 2>/dev/null; then
+    echo "python3 nema Google Play API biblioteke: pip3 install google-api-python-client google-auth" >&2
+    exit 1
+  fi
+  if [[ ! -f "$PLAY_UPLOAD" ]]; then
+    echo "Skripta za upload nije pronađena: $PLAY_UPLOAD" >&2
+    exit 1
+  fi
 fi
 
 # --- Pročitaj trenutnu verziju iz pubspec: "version: X.Y.Z+N" ---
@@ -111,4 +159,15 @@ if [[ "$FORMAT" == "aab" ]]; then
   echo ""
   echo "  Play Console: ako vidiš upozorenje za simbole, otpremi native debug simbole"
   echo "  (App bundle explorer → Downloads → Upload). Sadržaj: ${SYMBOLS_DIR}"
+fi
+
+# --- Upload na Google Play ---
+if $UPLOAD; then
+  TRACK="${PLAY_TRACK:-internal}"
+  echo ""
+  echo "==> Otpremam ${dest} na Google Play (${PACKAGE}, track: '${TRACK}')..."
+  python3 "$PLAY_UPLOAD" "$dest" "$PACKAGE" --track "$TRACK" --key "$PLAY_SERVICE_ACCOUNT_JSON"
+  echo ""
+  echo "✓ Otpremljeno na Google Play! Obrada traje nekoliko minuta,"
+  echo "  nakon čega će build biti vidljiv pod Testing → ${TRACK} track."
 fi

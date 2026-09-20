@@ -169,7 +169,8 @@ if $UPLOAD; then
   xcrun altool --upload-app --type ios \
     --file "$IPA" \
     --apiKey "$ASC_KEY_ID" \
-    --apiIssuer "$ASC_ISSUER_ID"
+    --apiIssuer "$ASC_ISSUER_ID" \
+    --show-progress
 
   echo ""
   echo "✓ Otpremljeno (${new_version}). Build se sada procesira u App Store Connect-u"

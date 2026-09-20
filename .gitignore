@@ -51,3 +51,4 @@ app.*.map.json
 android/key.properties
 release-key.jks
 ios/deploy.env
+android/deploy.env
