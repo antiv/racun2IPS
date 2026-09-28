@@ -56,6 +56,15 @@ i zahteva `android/deploy.env` (šablon u `android/deploy.env.example`) sa
 `PLAY_SERVICE_ACCOUNT_JSON` i `PLAY_TRACK`. iOS deploy needs `ios/deploy.env` (not in git,
 template at `ios/deploy.env.example`) with App Store Connect API credentials.
 
+Production: once the internal / TestFlight build is tested, `tool/promote.sh
+--dry-run --notes en="…" --notes sr="…"` (then without `--dry-run`) moves the
+`pubspec.yaml` version to the Play production track (`tool/play_promote.py`, no
+re-upload) and submits the same build for App Store review
+(`tool/asc_submit.py`). Notes are keyed by language and matched to each store
+listing (`tool/release_notes.py`): Play has only `sr`, the App Store `en-US`
+and `hr` (it has no Serbian; `hr` takes the `sr` note) — so both `en` and `sr`
+are needed. The Play service account needs "Release apps to production".
+
 ## Architecture
 
 ### State machine, not routes
