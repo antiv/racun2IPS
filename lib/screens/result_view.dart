@@ -83,35 +83,15 @@ class ResultView extends StatelessWidget {
         !hasPipe;
 
     final ipsString = generateIpsString(data, allowOpenAmount: isOwnCode);
-    // Oznaka izvora podataka (QR / OCR / AI / Tekst) sa ikonicom i specifičnom bojom.
-    final (sourceLabel, sourceBg, sourceFg, sourceIcon) = isOwnCode
-        ? (null, Colors.transparent, Colors.transparent, null)
+    // Kratka oznaka izvora podataka pored naslova "Podaci za plaćanje".
+    final sourceLabel = isOwnCode
+        ? null
         : switch (extractionSource) {
-            ExtractionSource.qr => (
-                t.sourceQr,
-                AppColors.emerald50,
-                AppColors.emerald700,
-                LucideIcons.qrCode,
-              ),
-            ExtractionSource.ocr => (
-                t.sourceOcr,
-                const Color(0xFFEFF6FF),
-                const Color(0xFF1D4ED8),
-                LucideIcons.scanText,
-              ),
-            ExtractionSource.ai => (
-                t.sourceAi,
-                const Color(0xFFFAF5FF),
-                const Color(0xFF7E22CE),
-                LucideIcons.sparkles,
-              ),
-            ExtractionSource.text => (
-                t.sourceText,
-                AppColors.stone100,
-                AppColors.stone700,
-                LucideIcons.clipboard,
-              ),
-            null => (null, Colors.transparent, Colors.transparent, null),
+            ExtractionSource.qr => t.sourceQr,
+            ExtractionSource.ocr => t.sourceOcr,
+            ExtractionSource.text => t.sourceText,
+            ExtractionSource.ai => t.sourceAi,
+            null => null,
           };
 
     return Column(
@@ -264,28 +244,18 @@ class ResultView extends StatelessWidget {
                     ),
                     if (sourceLabel != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                         decoration: BoxDecoration(
-                          color: sourceBg,
+                          color: AppColors.emerald50,
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: sourceFg.withValues(alpha: 0.2)),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (sourceIcon != null) ...[
-                              Icon(sourceIcon, size: 12.5, color: sourceFg),
-                              const SizedBox(width: 4.5),
-                            ],
-                            Text(
-                              sourceLabel,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: sourceFg,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          sourceLabel,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.emerald700,
+                          ),
                         ),
                       ),
                   ],
