@@ -405,8 +405,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final dir = await getTemporaryDirectory();
       final stamp = DateTime.now().microsecondsSinceEpoch;
       for (var i = 0; i < images.length; i++) {
-        final f = File('${dir.path}/ips_scan_${stamp}_$i.img');
-        await f.writeAsBytes(images[i], flush: true);
+        final bytes = images[i];
+        final isPng = bytes.length >= 8 &&
+            bytes[0] == 0x89 &&
+            bytes[1] == 0x50 &&
+            bytes[2] == 0x4E &&
+            bytes[3] == 0x47;
+        final ext = isPng ? 'png' : 'jpg';
+        final f = File('${dir.path}/ips_scan_${stamp}_$i.$ext');
+        await f.writeAsBytes(bytes, flush: true);
         tempFiles.add(f);
       }
 

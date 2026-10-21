@@ -29,6 +29,7 @@ cd "$SCRIPT_DIR"
 
 PUBSPEC="pubspec.yaml"
 ENV_FILE="ios/deploy.env"
+export PATH="$PATH:/opt/homebrew/bin"
 FLUTTER="fvm flutter"
 
 # --- Parsiranje argumenata ---

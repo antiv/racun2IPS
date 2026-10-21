@@ -2,6 +2,28 @@ import '../constants/ips.dart';
 import '../models/invoice_data.dart';
 import 'ips.dart';
 
+/// Preslikava srpska ćirilična slova u latinicu (1-na-1) radi ravnopravnog
+/// heurističkog prepoznavanja ćiriličnih uplatnica (EPS, Infostan, komunalije).
+String cyrillicToLatin(String input) {
+  const map = {
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Ђ': 'Đ', 'Е': 'E',
+    'Ж': 'Ž', 'З': 'Z', 'И': 'I', 'Ј': 'J', 'К': 'K', 'Л': 'L', 'Љ': 'Lj',
+    'М': 'M', 'Н': 'N', 'Њ': 'Nj', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S',
+    'Т': 'T', 'Ћ': 'Ć', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'C', 'Ч': 'Č',
+    'Џ': 'Dž', 'Ш': 'Š',
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'ђ': 'đ', 'е': 'e',
+    'ж': 'ž', 'з': 'z', 'и': 'i', 'ј': 'j', 'к': 'k', 'л': 'l', 'љ': 'lj',
+    'м': 'm', 'н': 'n', 'њ': 'nj', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's',
+    'т': 't', 'ћ': 'ć', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'č',
+    'џ': 'dž', 'ш': 'š',
+  };
+  final buf = StringBuffer();
+  for (var i = 0; i < input.length; i++) {
+    buf.write(map[input[i]] ?? input[i]);
+  }
+  return buf.toString();
+}
+
 /// Heuristički parser teksta sa srpskih računa i uplatnica (za lokalni OCR i clipboard).
 ///
 /// Primenjuje strogi "Confidence Gate": vraća [InvoiceData] isključivo kada su:
@@ -25,7 +47,8 @@ InvoiceData? tryParseInvoiceText(String rawText) {
     }
   }
 
-  final normalizedText = rawText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  final latinText = cyrillicToLatin(rawText);
+  final normalizedText = latinText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   final lines = normalizedText
       .split('\n')
       .map((l) => l.trim())
@@ -168,6 +191,8 @@ double? _extractAmount(String fullText, List<String> lines) {
         'za uplatiti',
         'za plaćanje',
         'za placanje',
+        'uplatom od',
+        'uplata od',
       ])) {
         score += 100;
       } else if (_containsAny(context, const [
@@ -197,7 +222,12 @@ double? _extractAmount(String fullText, List<String> lines) {
         'prethodni',
         'pretplata',
       ]) &&
-          !_containsAny(lower, const ['za uplatu', 'ukupno za uplatu'])) {
+          !_containsAny(lower, const [
+            'za uplatu',
+            'ukupno za uplatu',
+            'uplatom od',
+            'uplata od',
+          ])) {
         score -= 60;
       }
 

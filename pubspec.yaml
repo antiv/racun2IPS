@@ -3,7 +3,7 @@ description: "Invoice2IPS — skeniranje računa i generisanje NBS IPS QR koda"
 publish_to: 'none'
 
 # Verzija prati Tauri projekat (invoice2ips): versionName+versionCode.
-version: 1.0.21+1000020
+version: 1.0.22+1000021
 
 environment:
   sdk: ^3.12.2
@@ -42,6 +42,7 @@ dependencies:
   # Lokalna detekcija postojećeg NBS IPS QR koda na slici računa.
   google_mlkit_barcode_scanning: ^0.16.1
   lucide_icons_flutter: ^4.0.1
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:

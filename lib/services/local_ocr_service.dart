@@ -43,18 +43,28 @@ class LocalOcrService {
     try {
       final inputImage = InputImage.fromFilePath(filePath);
       final recognized = await recognizer.processImage(inputImage);
+      debugPrint(
+        'LocalOcrService: prepoznato ${recognized.text.length} karaktera teksta',
+      );
       if (recognized.text.trim().isEmpty) return null;
 
       // 1. Pokušaj parsiranja nad prirodnim redosledom blokova iz ML Kit-a.
       final direct = tryParseInvoiceText(recognized.text);
-      if (direct != null) return direct;
+      if (direct != null) {
+        debugPrint('LocalOcrService: uspešno parsirano direktno iz blokova teksta');
+        return direct;
+      }
 
       // 2. Na uplatnicama (dve kolone: levo Primalac/Svrha, desno Iznos/Račun/Poziv)
       // ML Kit nekada grupiše labele i vrednosti u odvojene blokove. Rekonstruiši
       // tekst po kolonama (leva kolona od vrha ka dnu, pa desna kolona od vrha ka dnu).
       final columnOrdered = _buildColumnOrderedText(recognized);
       if (columnOrdered.isNotEmpty && columnOrdered != recognized.text) {
-        return tryParseInvoiceText(columnOrdered);
+        final colResult = tryParseInvoiceText(columnOrdered);
+        if (colResult != null) {
+          debugPrint('LocalOcrService: uspešno parsirano iz kolona uplatnice');
+          return colResult;
+        }
       }
 
       return null;

@@ -234,11 +234,11 @@ const translations = <Language, Translations>{
     clipboardEmpty: 'Privremena memorija ne sadrži tekst',
     or: 'Ili',
     analyzing: 'Analiziranje računa',
-    extracting: 'Izvlačenje podataka pomoću AI...',
+    extracting: 'Očitavanje podataka sa računa...',
     processingSteps: [
       'Provera QR koda i teksta...',
       'Prepoznavanje iznosa i računa...',
-      'Provera podataka...',
+      'Validacija podataka za plaćanje...',
     ],
     extracted: 'Podaci su pročitani',
     extractedQr: 'Učitan postojeći IPS QR kod',
@@ -360,7 +360,7 @@ const translations = <Language, Translations>{
     clipboardEmpty: 'Clipboard does not contain any text',
     or: 'Or',
     analyzing: 'Analyzing Invoice',
-    extracting: 'Extracting payment details using AI...',
+    extracting: 'Reading invoice details...',
     processingSteps: [
       'Checking QR code & text...',
       'Detecting amount & account...',

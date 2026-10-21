@@ -52,7 +52,7 @@ for arg in "$@"; do
 done
 
 # --- FVM Flutter (sve komande kroz FVM, po konvenciji projekta) ---
-export PATH="/opt/homebrew/bin:$PATH"
+export PATH="$PATH:/opt/homebrew/bin"
 FLUTTER="fvm flutter"
 
 # --- GEMINI_API_KEY iz .env (obavezan za AI ekstrakciju) ---

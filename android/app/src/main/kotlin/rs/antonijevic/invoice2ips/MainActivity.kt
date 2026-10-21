@@ -14,6 +14,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.security.MessageDigest
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -46,7 +47,11 @@ class MainActivity : FlutterActivity() {
                     sharedImage = null
                 }
                 "renderPdfPages" -> {
-                    val pdfBytes = call.argument<ByteArray>("bytes")
+                    val pdfBytes = when (val raw = call.argument<Any>("bytes")) {
+                        is ByteArray -> raw
+                        is List<*> -> ByteArray(raw.size) { (raw[it] as Number).toByte() }
+                        else -> null
+                    }
                     if (pdfBytes == null || pdfBytes.isEmpty()) {
                         result.success(emptyList<ByteArray>())
                         return@setMethodCallHandler
@@ -160,54 +165,135 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleSendIntent(intent)
     }
 
     private fun handleSendIntent(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_SEND) return
-        val mime = intent.type ?: return
+        if (intent == null) return
+        val action = intent.action
+        if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE && action != Intent.ACTION_VIEW) return
 
         @Suppress("DEPRECATION")
-        val uri: Uri? = if (Build.VERSION.SDK_INT >= 33) {
+        val streamUri: Uri? = (if (Build.VERSION.SDK_INT >= 33) {
             intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         } else {
             intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }) ?: runCatching {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.firstOrNull()
+        }.getOrNull() ?: intent.getStringExtra(Intent.EXTRA_STREAM)?.let {
+            runCatching { Uri.parse(it) }.getOrNull()
         }
 
+        val clipUri: Uri? = if (intent.clipData != null && intent.clipData!!.itemCount > 0) {
+            intent.clipData!!.getItemAt(0).uri
+        } else {
+            null
+        }
+        val dataUri: Uri? = intent.data
+        // Prioritet: clipUri (gde sistem obično delegira URI permission) -> streamUri -> dataUri
+        val uri: Uri? = clipUri ?: streamUri ?: dataUri
+
+        val rawMime = intent.type ?: uri?.let {
+            try {
+                contentResolver.getType(it)
+            } catch (_: Exception) {
+                null
+            }
+        } ?: ""
+
+        val uriString = uri?.toString()?.lowercase() ?: ""
+        var isPdf = rawMime.contains("pdf", ignoreCase = true) || uriString.contains(".pdf")
+        var isImage = rawMime.startsWith("image/") ||
+                listOf(".png", ".jpg", ".jpeg", ".webp").any { uriString.contains(it) }
+
+        android.util.Log.i(
+            "Invoice2IPS",
+            "handleSendIntent: action=$action, rawMime=$rawMime, uri=$uri, isPdf=$isPdf, isImage=$isImage"
+        )
+
         try {
-            when {
-                mime.startsWith("image/") && uri != null -> {
-                    contentResolver.openInputStream(uri)?.use { stream ->
-                        val bytes = stream.readBytes()
-                        sharedImage = bytes
-                        sharedPayload = mapOf("type" to "image", "bytes" to bytes)
+            val bytes = if (uri != null) {
+                try {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } catch (e: Exception) {
+                    android.util.Log.w("Invoice2IPS", "openInputStream nije uspeo ($e), probam openFileDescriptor...")
+                    try {
+                        contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            FileInputStream(pfd.fileDescriptor).use { it.readBytes() }
+                        }
+                    } catch (e2: Exception) {
+                        android.util.Log.w("Invoice2IPS", "openFileDescriptor nije uspeo: $e2")
+                        if (uri.scheme == "file") {
+                            val file = File(uri.path ?: "")
+                            if (file.exists() && file.canRead()) file.readBytes() else null
+                        } else {
+                            null
+                        }
                     }
                 }
-                mime == "application/pdf" && uri != null -> {
-                    contentResolver.openInputStream(uri)?.use { stream ->
-                        val bytes = stream.readBytes()
-                        sharedPayload = mapOf("type" to "pdf", "bytes" to bytes)
-                    }
+            } else {
+                null
+            }
+
+            if (bytes != null && bytes.isNotEmpty()) {
+                // Magic byte provera za 100% tačnu detekciju formata
+                val isPdfMagic = bytes.size >= 4 &&
+                        bytes[0] == 0x25.toByte() && // %
+                        bytes[1] == 0x50.toByte() && // P
+                        bytes[2] == 0x44.toByte() && // D
+                        bytes[3] == 0x46.toByte()    // F
+                val isPngMagic = bytes.size >= 8 &&
+                        bytes[0] == 0x89.toByte() &&
+                        bytes[1] == 0x50.toByte() &&
+                        bytes[2] == 0x4E.toByte() &&
+                        bytes[3] == 0x47.toByte()
+                val isJpgMagic = bytes.size >= 3 &&
+                        bytes[0] == 0xFF.toByte() &&
+                        bytes[1] == 0xD8.toByte() &&
+                        bytes[2] == 0xFF.toByte()
+
+                if (isPdfMagic) {
+                    isPdf = true
+                    isImage = false
+                } else if (isPngMagic || isJpgMagic) {
+                    isImage = true
+                    isPdf = false
                 }
-                mime.startsWith("text/") -> {
-                    val extraText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                    if (!extraText.isNullOrBlank()) {
-                        sharedPayload = mapOf("type" to "text", "text" to extraText)
-                    } else if (uri != null) {
-                        contentResolver.openInputStream(uri)?.use { stream ->
-                            val text = stream.readBytes().toString(Charsets.UTF_8)
-                            if (text.isNotBlank()) {
-                                sharedPayload = mapOf("type" to "text", "text" to text)
-                            }
+
+                if (isPdf) {
+                    android.util.Log.i("Invoice2IPS", "Uspesno ucitan deljeni PDF: ${bytes.size} bajtova")
+                    sharedPayload = mapOf("type" to "pdf", "bytes" to bytes)
+                } else if (isImage) {
+                    android.util.Log.i("Invoice2IPS", "Uspesno ucitana deljena slika: ${bytes.size} bajtova")
+                    sharedImage = bytes
+                    sharedPayload = mapOf("type" to "image", "bytes" to bytes)
+                } else {
+                    android.util.Log.w("Invoice2IPS", "Nepoznat binarni format fajla (${bytes.size} bajtova)")
+                }
+            } else {
+                val extraText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                if (!extraText.isNullOrBlank()) {
+                    android.util.Log.i("Invoice2IPS", "Uspesno ucitan deljeni tekst iz EXTRA_TEXT")
+                    sharedPayload = mapOf("type" to "text", "text" to extraText)
+                } else if (rawMime.startsWith("text/") && uri != null) {
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        val text = stream.readBytes().toString(Charsets.UTF_8)
+                        if (text.isNotBlank()) {
+                            android.util.Log.i("Invoice2IPS", "Uspesno ucitan deljeni tekst iz URI-ja")
+                            sharedPayload = mapOf("type" to "text", "text" to text)
                         }
                     }
                 }
             }
-        } catch (_: Exception) {
-            // Podeljeni sadržaj nije dostupan — ignoriši, aplikacija se normalno otvara.
+        } catch (e: Exception) {
+            android.util.Log.e("Invoice2IPS", "Greska pri ucitavanju deljenog sadrzaja: $e", e)
         }
 
-        // Ukloni EXTRA_STREAM i EXTRA_TEXT da se ne obrade ponovo pri recreate-u.
+        // Ukloni extras i data da se ne obrade ponovo pri recreate-u
+        intent.data = null
+        intent.clipData = null
         intent.removeExtra(Intent.EXTRA_STREAM)
         intent.removeExtra(Intent.EXTRA_TEXT)
     }

@@ -49,6 +49,10 @@ android {
 
     buildTypes {
         release {
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             // Potpisuj release ključem ako postoji key.properties,
             // inače debug (da `flutter run --release` radi i bez keystore-a).
             signingConfig = if (hasReleaseSigning) {
