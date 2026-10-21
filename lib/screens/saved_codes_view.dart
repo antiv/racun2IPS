@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import '../i18n/translations.dart';
 import '../models/saved_code.dart';
 import '../theme.dart';
+import '../widgets/quick_qr_sheet.dart';
 
-/// Lista sačuvanih ličnih IPS kodova, sa pretragom i brisanjem.
+enum _SavedFilter { all, bills, own }
+
+/// Lista sačuvanih IPS kodova i šablona računa, sa pretragom, filterima,
+/// pinovanjem, statusom plaćanja i brzim prikazom QR koda.
 class SavedCodesView extends StatefulWidget {
   const SavedCodesView({
     super.key,
@@ -12,6 +16,11 @@ class SavedCodesView extends StatefulWidget {
     required this.codes,
     required this.onOpen,
     required this.onDelete,
+    required this.onTogglePin,
+    required this.onTogglePaid,
+    required this.onAmountUpdated,
+    required this.onCopy,
+    required this.onShare,
     required this.onAddPressed,
     required this.onExport,
     required this.onImport,
@@ -21,6 +30,11 @@ class SavedCodesView extends StatefulWidget {
   final List<SavedCode> codes;
   final ValueChanged<SavedCode> onOpen;
   final ValueChanged<String> onDelete;
+  final ValueChanged<String> onTogglePin;
+  final ValueChanged<String> onTogglePaid;
+  final void Function(String id, double amount) onAmountUpdated;
+  final ValueChanged<String> onCopy;
+  final void Function(SavedCode code) onShare;
   final VoidCallback onAddPressed;
   final VoidCallback onExport;
   final VoidCallback onImport;
@@ -32,6 +46,7 @@ class SavedCodesView extends StatefulWidget {
 class _SavedCodesViewState extends State<SavedCodesView> {
   final _searchController = TextEditingController();
   String _query = '';
+  _SavedFilter _filter = _SavedFilter.all;
 
   @override
   void dispose() {
@@ -39,15 +54,37 @@ class _SavedCodesViewState extends State<SavedCodesView> {
     super.dispose();
   }
 
-  List<SavedCode> get _filtered {
+  List<SavedCode> get _filteredAndSorted {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return widget.codes;
-    return widget.codes.where((c) {
+    final list = widget.codes.where((c) {
+      // 1. Filter po kategoriji
+      switch (_filter) {
+        case _SavedFilter.all:
+          break;
+        case _SavedFilter.bills:
+          if (c.kind != SavedCodeKind.billTemplate) return false;
+        case _SavedFilter.own:
+          if (c.kind != SavedCodeKind.ownAccount) return false;
+      }
+
+      // 2. Filter po pretrazi
+      if (q.isEmpty) return true;
       final data = c.data;
-      return data.recipientName.toLowerCase().contains(q) ||
+      return c.title.toLowerCase().contains(q) ||
+          data.recipientName.toLowerCase().contains(q) ||
           data.accountNumber.toLowerCase().contains(q) ||
+          data.referenceNumber.toLowerCase().contains(q) ||
           data.purpose.toLowerCase().contains(q);
     }).toList();
+
+    // Sortiranje: Pinovani prvi, pa po datumu ažuriranja
+    list.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+
+    return list;
   }
 
   Future<bool> _confirmDelete(BuildContext context) async {
@@ -73,11 +110,29 @@ class _SavedCodesViewState extends State<SavedCodesView> {
     return confirmed ?? false;
   }
 
+  void _showQuickSheet(SavedCode code) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => QuickQrSheet(
+        t: widget.t,
+        code: code,
+        onCopy: widget.onCopy,
+        onShare: () => widget.onShare(code),
+        onTogglePin: () => widget.onTogglePin(code.id),
+        onTogglePaid: () => widget.onTogglePaid(code.id),
+        onAmountUpdated: (newAmt) => widget.onAmountUpdated(code.id, newAmt),
+        onEditDetails: () => widget.onOpen(code),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = widget.t;
     final bottomInset = MediaQuery.of(context).padding.bottom;
-    final filtered = _filtered;
+    final filtered = _filteredAndSorted;
 
     return Column(
       children: [
@@ -85,6 +140,7 @@ class _SavedCodesViewState extends State<SavedCodesView> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
             children: [
+              // Naslov i dugmad za uvoz/izvoz
               Row(
                 children: [
                   Expanded(
@@ -113,6 +169,32 @@ class _SavedCodesViewState extends State<SavedCodesView> {
                 ],
               ),
               const SizedBox(height: 8),
+
+              // Filter tabovi (Svi / Računi za plaćanje / Moji kodovi)
+              Row(
+                children: [
+                  _FilterPill(
+                    label: t.filterAll,
+                    isSelected: _filter == _SavedFilter.all,
+                    onTap: () => setState(() => _filter = _SavedFilter.all),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    label: t.filterBills,
+                    isSelected: _filter == _SavedFilter.bills,
+                    onTap: () => setState(() => _filter = _SavedFilter.bills),
+                  ),
+                  const SizedBox(width: 8),
+                  _FilterPill(
+                    label: t.filterOwn,
+                    isSelected: _filter == _SavedFilter.own,
+                    onTap: () => setState(() => _filter = _SavedFilter.own),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Pretraga
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -138,7 +220,8 @@ class _SavedCodesViewState extends State<SavedCodesView> {
                   style: const TextStyle(fontSize: 14, color: AppColors.stone800),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
+
               if (widget.codes.isEmpty)
                 _EmptyState(
                   title: t.noSavedCodesTitle,
@@ -152,7 +235,8 @@ class _SavedCodesViewState extends State<SavedCodesView> {
                   _SavedCodeRow(
                     t: t,
                     code: filtered[i],
-                    onTap: () => widget.onOpen(filtered[i]),
+                    onTap: () => _showQuickSheet(filtered[i]),
+                    onTogglePin: () => widget.onTogglePin(filtered[i].id),
                     onDismissed: () => widget.onDelete(filtered[i].id),
                     confirmDismiss: () => _confirmDelete(context),
                   ),
@@ -191,6 +275,44 @@ class _SavedCodesViewState extends State<SavedCodesView> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.stone900 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.stone900 : AppColors.stone200,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : AppColors.stone600,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -237,6 +359,7 @@ class _SavedCodeRow extends StatelessWidget {
     required this.t,
     required this.code,
     required this.onTap,
+    required this.onTogglePin,
     required this.onDismissed,
     required this.confirmDismiss,
   });
@@ -244,6 +367,7 @@ class _SavedCodeRow extends StatelessWidget {
   final Translations t;
   final SavedCode code;
   final VoidCallback onTap;
+  final VoidCallback onTogglePin;
   final VoidCallback onDismissed;
   final Future<bool> Function() confirmDismiss;
 
@@ -264,6 +388,16 @@ class _SavedCodeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasTitle = code.title.isNotEmpty;
+    final displayTitle = hasTitle ? code.title : code.data.recipientName;
+    final displaySubtitle = hasTitle
+        ? (code.data.recipientName.isNotEmpty
+            ? '${code.data.recipientName} • $_maskedAccount'
+            : _maskedAccount)
+        : (code.data.purpose.isNotEmpty ? code.data.purpose : _maskedAccount);
+
+    final isPaid = code.isPaidThisMonth;
+
     return Dismissible(
       key: ValueKey(code.id),
       direction: DismissDirection.endToStart,
@@ -286,28 +420,66 @@ class _SavedCodeRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.stone100),
+            border: Border.all(
+              color: code.isPinned ? AppColors.emerald200 : AppColors.stone100,
+              width: code.isPinned ? 1.5 : 1.0,
+            ),
           ),
           child: Row(
             children: [
+              if (code.isPinned) ...[
+                const Icon(Icons.push_pin, size: 16, color: AppColors.emerald600),
+                const SizedBox(width: 8),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      code.data.recipientName.isEmpty
-                          ? _maskedAccount
-                          : code.data.recipientName,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.stone800,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayTitle.isEmpty ? _maskedAccount : displayTitle,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.stone800,
+                            ),
+                          ),
+                        ),
+                        if (isPaid) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.emerald50,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check,
+                                    size: 11, color: AppColors.emerald700),
+                                const SizedBox(width: 2),
+                                Text(
+                                  t.paidBadge,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.emerald700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      code.data.purpose.isEmpty ? _maskedAccount : code.data.purpose,
+                      displaySubtitle,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 12.5,

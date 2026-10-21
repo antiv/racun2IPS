@@ -11,11 +11,13 @@ class AppColors {
   static const stone400 = Color(0xFFA8A29E);
   static const stone500 = Color(0xFF78716C);
   static const stone600 = Color(0xFF57534E);
+  static const stone700 = Color(0xFF44403C);
   static const stone800 = Color(0xFF292524);
   static const stone900 = Color(0xFF1C1917);
 
   static const emerald50 = Color(0xFFECFDF5);
   static const emerald100 = Color(0xFFD1FAE5);
+  static const emerald200 = Color(0xFFA7F3D0);
   static const emerald400 = Color(0xFF34D399);
   static const emerald500 = Color(0xFF10B981);
   static const emerald600 = Color(0xFF059669);

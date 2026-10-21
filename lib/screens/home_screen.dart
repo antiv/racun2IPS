@@ -73,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   ExtractionSource? _extractionSource;
   // Not null samo kad je ResultView otvoren nad postojećim sačuvanim kodom.
   String? _editingSavedId;
+  String _editingTitle = '';
 
   Translations get _t => translations[_lang]!;
 
@@ -462,6 +463,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _invoiceData = null;
       _error = null;
       _editingSavedId = null;
+      _editingTitle = '';
       _extractionSource = null;
       _resultMode = ResultMode.payInvoice;
       _state = wasOwnCode ? AppState.savedList : AppState.idle;
@@ -529,6 +531,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _resultMode = ResultMode.ownCode;
       _editingSavedId = null;
+      _editingTitle = '';
       _image = null;
       _invoiceData = InvoiceData();
       _state = AppState.result;
@@ -537,8 +540,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _openSavedCode(SavedCode saved) {
     setState(() {
-      _resultMode = ResultMode.ownCode;
+      _resultMode = saved.kind == SavedCodeKind.ownAccount
+          ? ResultMode.ownCode
+          : ResultMode.payInvoice;
       _editingSavedId = saved.id;
+      _editingTitle = saved.title;
       _image = null;
       _invoiceData = saved.data.copyWith();
       _state = AppState.result;
@@ -553,25 +559,66 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _savedCodesService.add(SavedCode(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         createdAt: DateTime.now(),
+        title: _editingTitle,
+        kind: SavedCodeKind.ownAccount,
         data: data.copyWith(),
       ));
     } else {
-      await _savedCodesService.update(editingId, data.copyWith());
+      await _savedCodesService.update(
+        editingId,
+        data.copyWith(),
+        title: _editingTitle,
+      );
     }
     await _loadSavedCodes();
     if (!mounted) return;
     _reset();
   }
 
-  // Čuvanje skeniranog (payInvoice) računa među sačuvane kodove — za razliku
-  // od _saveCurrentCode (ownCode), ostaje na ResultView umesto da resetuje,
-  // jer korisnik možda još želi da podeli/kopira ili skenira sledeći.
+  // Čuvanje skeniranog (payInvoice) računa među sačuvane kodove (šablone).
   Future<void> _saveScannedInvoice() async {
     final data = _invoiceData;
     if (data == null) return;
+
+    // Provera duplikata: ako šablon sa istim računom i pozivom već postoji, ponudi ažuriranje
+    final existing = await _savedCodesService.findDuplicate(
+      accountNumber: data.accountNumber,
+      referenceNumber: data.referenceNumber,
+      recipientName: data.recipientName,
+    );
+    if (existing != null && mounted) {
+      final shouldUpdate = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(_t.duplicateFoundTitle),
+          content: Text(_t.duplicateFoundMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(_t.saveNew),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.emerald600),
+              child: Text(_t.updateExisting),
+            ),
+          ],
+        ),
+      );
+      if (shouldUpdate == true) {
+        await _savedCodesService.updateAmount(existing.id, data.amount);
+        await _loadSavedCodes();
+        if (!mounted) return;
+        _showToast(_t.savedToast);
+        return;
+      }
+    }
+
     await _savedCodesService.add(SavedCode(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       createdAt: DateTime.now(),
+      kind: SavedCodeKind.billTemplate,
+      title: _editingTitle.isNotEmpty ? _editingTitle : data.recipientName,
       data: data.copyWith(),
     ));
     await _loadSavedCodes();
@@ -1016,6 +1063,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           extractionSource: _extractionSource,
           mode: _resultMode,
           isEditingExisting: _editingSavedId != null,
+          codeTitle: _editingTitle,
+          onTitleChanged: (val) => setState(() => _editingTitle = val),
           onSave: _resultMode == ResultMode.ownCode ? _saveCurrentCode : null,
           onDelete: _editingSavedId != null ? _deleteCurrentAndReturn : null,
           onSaveScanned:
@@ -1040,6 +1089,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           codes: _savedCodes,
           onOpen: _openSavedCode,
           onDelete: _deleteSavedCode,
+          onTogglePin: (id) async {
+            await _savedCodesService.togglePin(id);
+            await _loadSavedCodes();
+          },
+          onTogglePaid: (id) async {
+            await _savedCodesService.togglePaidThisMonth(id);
+            await _loadSavedCodes();
+          },
+          onAmountUpdated: (id, amt) async {
+            await _savedCodesService.updateAmount(id, amt);
+            await _loadSavedCodes();
+          },
+          onCopy: _handleCopy,
+          onShare: (code) => share_utils.shareQrCode(
+            generateIpsString(
+              code.data,
+              allowOpenAmount: code.kind == SavedCodeKind.ownAccount,
+            ),
+            t.title,
+            t.shareDesc,
+          ),
           onAddPressed: _showAddOwnCodeSheet,
           onExport: _exportSavedCodes,
           onImport: _importSavedCodes,

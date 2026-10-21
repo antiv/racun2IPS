@@ -50,6 +50,21 @@ class Translations {
     required this.invalidFormNote,
     required this.savedCodesTitle,
     required this.searchHint,
+    required this.filterAll,
+    required this.filterBills,
+    required this.filterOwn,
+    required this.pin,
+    required this.unpin,
+    required this.markAsPaid,
+    required this.paidThisMonth,
+    required this.paidBadge,
+    required this.editDetails,
+    required this.codeTitleLabel,
+    required this.codeTitleHint,
+    required this.duplicateFoundTitle,
+    required this.duplicateFoundMessage,
+    required this.updateExisting,
+    required this.saveNew,
     required this.noSavedCodesTitle,
     required this.noSavedCodesDesc,
     required this.noSearchResults,
@@ -127,6 +142,21 @@ class Translations {
   final String invalidFormNote;
   final String savedCodesTitle;
   final String searchHint;
+  final String filterAll;
+  final String filterBills;
+  final String filterOwn;
+  final String pin;
+  final String unpin;
+  final String markAsPaid;
+  final String paidThisMonth;
+  final String paidBadge;
+  final String editDetails;
+  final String codeTitleLabel;
+  final String codeTitleHint;
+  final String duplicateFoundTitle;
+  final String duplicateFoundMessage;
+  final String updateExisting;
+  final String saveNew;
   final String noSavedCodesTitle;
   final String noSavedCodesDesc;
   final String noSearchResults;
@@ -217,6 +247,22 @@ const translations = <Language, Translations>{
         'Popunite i ispravite sva obavezna polja označena crvenom bojom da bi QR kod bio validan.',
     savedCodesTitle: 'Sačuvani kodovi',
     searchHint: 'Pretraga po primaocu, računu ili svrsi',
+    filterAll: 'Svi',
+    filterBills: 'Računi za plaćanje',
+    filterOwn: 'Moji kodovi',
+    pin: 'Zakači na vrh',
+    unpin: 'Otkači sa vrha',
+    markAsPaid: 'Označi kao plaćeno ovog meseca',
+    paidThisMonth: 'Plaćeno ovog meseca',
+    paidBadge: 'Plaćeno',
+    editDetails: 'Izmeni sve detalje računa',
+    codeTitleLabel: 'Naziv / Šablon (opciono)',
+    codeTitleHint: 'npr. Struja - Stan',
+    duplicateFoundTitle: 'Račun već postoji',
+    duplicateFoundMessage:
+        'Šablon za ovaj račun već postoji. Da li želite da ažurirate iznos na postojećem šablonu?',
+    updateExisting: 'Ažuriraj postojeći',
+    saveNew: 'Sačuvaj kao novi',
     noSavedCodesTitle: 'Nemate sačuvanih kodova',
     noSavedCodesDesc:
         'Napravite svoj IPS kod da vam neko drugi uplati na račun.',
@@ -309,6 +355,22 @@ const translations = <Language, Translations>{
         'Fill in and correct all required fields marked in red for the QR code to be valid.',
     savedCodesTitle: 'Saved codes',
     searchHint: 'Search by recipient, account or purpose',
+    filterAll: 'All',
+    filterBills: 'Bills to pay',
+    filterOwn: 'My codes',
+    pin: 'Pin to top',
+    unpin: 'Unpin',
+    markAsPaid: 'Mark as paid this month',
+    paidThisMonth: 'Paid this month',
+    paidBadge: 'Paid',
+    editDetails: 'Edit all bill details',
+    codeTitleLabel: 'Title / Template (optional)',
+    codeTitleHint: 'e.g. Electricity - Home',
+    duplicateFoundTitle: 'Bill already saved',
+    duplicateFoundMessage:
+        'A template for this bill already exists. Would you like to update the amount on the existing template?',
+    updateExisting: 'Update existing',
+    saveNew: 'Save as new',
     noSavedCodesTitle: 'No saved codes yet',
     noSavedCodesDesc: 'Create your own IPS code so someone can pay you.',
     noSearchResults: 'No results for this search',

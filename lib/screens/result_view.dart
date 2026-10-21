@@ -31,6 +31,8 @@ class ResultView extends StatelessWidget {
     this.onSaveScanned,
     this.image,
     this.extractionSource,
+    this.codeTitle,
+    this.onTitleChanged,
   });
 
   final Translations t;
@@ -38,6 +40,8 @@ class ResultView extends StatelessWidget {
   final bool copied;
   final Uint8List? image;
   final ExtractionSource? extractionSource;
+  final String? codeTitle;
+  final ValueChanged<String>? onTitleChanged;
   final VoidCallback onChanged;
   final ValueChanged<String> onCopy;
   final VoidCallback onShare;
@@ -286,6 +290,18 @@ class ResultView extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
+                    if (isOwnCode || isEditingExisting) ...[
+                      EditableRow(
+                        label: t.codeTitleLabel,
+                        value: codeTitle ?? '',
+                        maxLength: 40,
+                        hintText: t.codeTitleHint,
+                        onChanged: (val) {
+                          onTitleChanged?.call(val);
+                        },
+                      ),
+                      const _RowDivider(),
+                    ],
                     EditableRow(
                       label: t.recipient,
                       value: data.recipientName,

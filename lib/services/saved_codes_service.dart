@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/invoice_data.dart';
 import '../models/saved_code.dart';
 
-/// Perzistencija sačuvanih IPS kodova preko shared_preferences,
-/// kao jedan JSON-enkodiran niz.
+/// Perzistencija sačuvanih IPS kodova i šablona računa preko shared_preferences,
+/// kao jedan JSON-enkodiran niz sa podrškom za pinovanje, status plaćanja i brzu izmenu iznosa.
 class SavedCodesService {
   static const _key = 'saved_ips_codes';
 
@@ -14,10 +14,14 @@ class SavedCodesService {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
     if (raw == null || raw.isEmpty) return [];
-    final list = jsonDecode(raw) as List;
-    return list
-        .map((e) => SavedCode.fromJson(e as Map<String, dynamic>))
-        .toList();
+    try {
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((e) => SavedCode.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> add(SavedCode code) async {
@@ -26,12 +30,77 @@ class SavedCodesService {
     await _writeAll(codes);
   }
 
-  Future<void> update(String id, InvoiceData data) async {
+  Future<void> update(String id, InvoiceData data, {String? title}) async {
     final codes = await loadAll();
     final index = codes.indexWhere((c) => c.id == id);
     if (index == -1) return;
     codes[index].data = data;
+    if (title != null) codes[index].title = title;
+    codes[index].updatedAt = DateTime.now();
     await _writeAll(codes);
+  }
+
+  Future<void> updateAmount(String id, double newAmount) async {
+    final codes = await loadAll();
+    final index = codes.indexWhere((c) => c.id == id);
+    if (index == -1) return;
+    codes[index].data.amount = newAmount;
+    codes[index].updatedAt = DateTime.now();
+    await _writeAll(codes);
+  }
+
+  Future<void> togglePin(String id) async {
+    final codes = await loadAll();
+    final index = codes.indexWhere((c) => c.id == id);
+    if (index == -1) return;
+    codes[index].isPinned = !codes[index].isPinned;
+    codes[index].updatedAt = DateTime.now();
+    await _writeAll(codes);
+  }
+
+  Future<void> togglePaidThisMonth(String id) async {
+    final codes = await loadAll();
+    final index = codes.indexWhere((c) => c.id == id);
+    if (index == -1) return;
+    final code = codes[index];
+    if (code.isPaidThisMonth) {
+      code.lastPaidAt = null;
+    } else {
+      code.lastPaidAt = DateTime.now();
+    }
+    code.updatedAt = DateTime.now();
+    await _writeAll(codes);
+  }
+
+  /// Traži postojeći sačuvani račun sa istim brojem računa i pozivom na broj
+  /// (ili primaocem ako poziv na broj ne postoji).
+  Future<SavedCode?> findDuplicate({
+    required String accountNumber,
+    required String referenceNumber,
+    String? recipientName,
+  }) async {
+    if (accountNumber.isEmpty) return null;
+    final codes = await loadAll();
+    final cleanAcc = accountNumber.replaceAll(RegExp(r'[^0-9]'), '');
+
+    for (final code in codes) {
+      final codeAcc = code.data.accountNumber.replaceAll(RegExp(r'[^0-9]'), '');
+      if (codeAcc != cleanAcc) continue;
+
+      if (referenceNumber.isNotEmpty &&
+          code.data.referenceNumber.isNotEmpty &&
+          code.data.referenceNumber == referenceNumber) {
+        return code;
+      }
+
+      if (referenceNumber.isEmpty &&
+          recipientName != null &&
+          recipientName.isNotEmpty &&
+          code.data.recipientName.toLowerCase() == recipientName.toLowerCase()) {
+        return code;
+      }
+    }
+    return null;
   }
 
   Future<void> delete(String id) async {
