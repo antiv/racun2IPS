@@ -22,6 +22,108 @@ String parseAccountNumber(String val) {
   return val.replaceAll(RegExp(r'[^0-9]'), '');
 }
 
+/// Normalizuje broj računa na tačno 18 cifara (PPP + 13 cifara sredine + KK).
+String normalizeAccountNumber(String val) {
+  final parsed = parseAccountNumber(val);
+  if (parsed.length != 18 && parsed.length >= 5) {
+    final bankPrefix = parsed.substring(0, 3);
+    final checkDigits = parsed.substring(parsed.length - 2);
+    final middle = parsed.substring(3, parsed.length - 2);
+    final normalizedMiddle = middle.length <= 13
+        ? middle.padLeft(13, '0')
+        : middle.substring(middle.length - 13);
+    return '$bankPrefix$normalizedMiddle$checkDigits';
+  }
+  return parsed;
+}
+
+/// Parsira postojeći NBS IPS QR string (npr. "K:PR|V:01|C:1|R:...|N:...|I:RSD...")
+/// u [InvoiceData]. Vraća `null` ako string nije validan NBS IPS kod
+/// (npr. URL sa fiskalnog računa ili promotivni QR kod).
+InvoiceData? parseIpsString(String raw) {
+  final trimmed = raw.trim();
+  if (!trimmed.contains('|') || !trimmed.contains(':')) return null;
+
+  final tags = <String, String>{};
+  for (final part in trimmed.split('|')) {
+    final segment = part.trim();
+    if (segment.isEmpty) continue;
+    final colonIdx = segment.indexOf(':');
+    if (colonIdx <= 0) continue;
+    final key = segment.substring(0, colonIdx).trim().toUpperCase();
+    final value = segment.substring(colonIdx + 1).trim();
+    tags[key] = value;
+  }
+
+  final kind = tags['K']?.toUpperCase();
+  if (kind != 'PR' && kind != 'EK') return null;
+
+  final rawAccount = tags['R'] ?? '';
+  final accountNumber = normalizeAccountNumber(rawAccount);
+  if (accountNumber.isEmpty) return null;
+
+  final rawRecipient = (tags['N'] ?? '')
+      .replaceAll(RegExp(r'[\r\n]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (rawRecipient.isEmpty) return null;
+  final recipientName = rawRecipient.length > IpsLimits.n
+      ? rawRecipient.substring(0, IpsLimits.n)
+      : rawRecipient;
+
+  var amount = 0.0;
+  final rawAmount = tags['I'];
+  if (rawAmount != null && rawAmount.isNotEmpty) {
+    final numericPart = rawAmount
+        .replaceFirst(RegExp(r'^RSD\s*', caseSensitive: false), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.')
+        .trim();
+    if (numericPart.isNotEmpty) {
+      final parsed = double.tryParse(numericPart);
+      if (parsed != null && !parsed.isNaN && parsed >= 0) {
+        amount = parsed;
+      }
+    }
+  }
+
+  var paymentCode =
+      (tags['SF'] ?? '289').replaceAll(RegExp(r'[^0-9]'), '');
+  if (paymentCode.isEmpty) {
+    paymentCode = '289';
+  } else if (paymentCode.startsWith('1') && paymentCode.length == 3) {
+    paymentCode = '2${paymentCode.substring(1)}';
+  }
+  if (paymentCode.length > IpsLimits.sf) {
+    paymentCode = paymentCode.substring(0, IpsLimits.sf);
+  }
+
+  final rawPurpose = (tags['S'] ?? '')
+      .replaceAll(RegExp(r'[\r\n]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  final purpose = rawPurpose.length > IpsLimits.s
+      ? rawPurpose.substring(0, IpsLimits.s)
+      : rawPurpose;
+
+  var referenceNumber = (tags['RO'] ?? '').replaceAll(RegExp(r'\s+'), '').trim();
+  if (referenceNumber.startsWith('97')) {
+    referenceNumber = referenceNumber.replaceAll('-', '');
+  }
+  if (referenceNumber.length > IpsLimits.ro) {
+    referenceNumber = referenceNumber.substring(0, IpsLimits.ro);
+  }
+
+  return InvoiceData(
+    recipientName: recipientName,
+    accountNumber: accountNumber,
+    amount: amount,
+    paymentCode: paymentCode,
+    purpose: purpose,
+    referenceNumber: referenceNumber,
+  );
+}
+
 /// Validira srpski broj računa Modulo 97 algoritmom (18 cifara).
 bool validateAccountNumber(String account) {
   if (account.length != 18) return false;

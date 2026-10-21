@@ -30,12 +30,14 @@ class ResultView extends StatelessWidget {
     this.onDelete,
     this.onSaveScanned,
     this.image,
+    this.extractionSource,
   });
 
   final Translations t;
   final InvoiceData data;
   final bool copied;
   final Uint8List? image;
+  final ExtractionSource? extractionSource;
   final VoidCallback onChanged;
   final ValueChanged<String> onCopy;
   final VoidCallback onShare;
@@ -78,6 +80,13 @@ class ResultView extends StatelessWidget {
         !hasPipe;
 
     final ipsString = generateIpsString(data, allowOpenAmount: isOwnCode);
+    final bannerTitle = isOwnCode
+        ? t.ownCodeBannerTitle
+        : switch (extractionSource) {
+            ExtractionSource.qr => t.extractedQr,
+            ExtractionSource.ocr => t.extractedOcr,
+            _ => t.extracted,
+          };
 
     return Column(
       children: [
@@ -95,7 +104,7 @@ class ResultView extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      isOwnCode
+                      isOwnCode || extractionSource == ExtractionSource.qr
                           ? Icons.qr_code_2
                           : Icons.check_circle_outline,
                       size: 22,
@@ -104,7 +113,7 @@ class ResultView extends StatelessWidget {
                     const SizedBox(width: 11),
                     Expanded(
                       child: Text(
-                        isOwnCode ? t.ownCodeBannerTitle : t.extracted,
+                        bannerTitle,
                         style: const TextStyle(
                           fontSize: 14.5,
                           fontWeight: FontWeight.w600,

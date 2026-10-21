@@ -1,15 +1,19 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../i18n/translations.dart';
 import '../models/invoice_data.dart';
 import '../models/saved_code.dart';
 import '../services/gemini_service.dart';
+import '../services/local_ocr_service.dart';
+import '../services/qr_scanner_service.dart';
 import '../services/review_service.dart';
 import '../services/saved_codes_service.dart';
 import '../services/shared_image.dart';
@@ -57,12 +61,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   final _savedCodesService = SavedCodesService();
   final _reviewService = ReviewService();
+  final _qrScannerService = QrScannerService();
+  final _localOcrService = LocalOcrService();
   // True kad je dostignut prag skeniranih računa, a ponuda za ocenjivanje
   // čeka da korisnik napusti ekran rezultata (da ne prekriva QR kod).
   bool _reviewPending = false;
 
   List<SavedCode> _savedCodes = [];
   ResultMode _resultMode = ResultMode.payInvoice;
+  ExtractionSource? _extractionSource;
   // Not null samo kad je ResultView otvoren nad postojećim sačuvanim kodom.
   String? _editingSavedId;
 
@@ -246,12 +253,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() {
       _state = AppState.processing;
       _error = null;
+      _extractionSource = null;
     });
     try {
-      final data = await processInvoice(imageBytes);
+      final (data, source) = await _extractInvoiceCascade(imageBytes);
       if (!mounted) return;
       setState(() {
         _invoiceData = data;
+        _extractionSource = source;
         _state = AppState.result;
       });
       // Broje se samo skenirani računi — pravljenje sopstvenog IPS koda nije
@@ -274,6 +283,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _state = AppState.error;
       });
     }
+  }
+
+  /// Trostepena ekstrakcija:
+  /// 1. Lokalni QR skener (ako na slici već postoji NBS IPS QR kod),
+  /// 2. Lokalni OCR na uređaju + Modulo-97 validacija,
+  /// 3. Fallback na Gemini AI model ako lokalne metode ne izvuku potpune podatke.
+  Future<(InvoiceData, ExtractionSource)> _extractInvoiceCascade(
+    Uint8List imageBytes,
+  ) async {
+    File? tempFile;
+    try {
+      final dir = await getTemporaryDirectory();
+      tempFile = File(
+        '${dir.path}/ips_scan_${DateTime.now().microsecondsSinceEpoch}.jpg',
+      );
+      await tempFile.writeAsBytes(imageBytes, flush: true);
+
+      // Korak 1: Proveri da li na računu već postoji NBS IPS QR kod (<100ms, 100% tačnost)
+      final qrData = await _qrScannerService.tryExtractIpsFromFile(tempFile.path);
+      if (qrData != null) {
+        return (qrData, ExtractionSource.qr);
+      }
+
+      // Korak 2: Pokušaj brzu lokalnu OCR ekstrakciju sa Modulo-97 proverom
+      final ocrData = await _localOcrService.tryExtractFromFile(tempFile.path);
+      if (ocrData != null) {
+        return (ocrData, ExtractionSource.ocr);
+      }
+    } catch (e) {
+      debugPrint('Local extraction skipped: $e');
+    } finally {
+      try {
+        if (tempFile != null && await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+    }
+
+    // Korak 3: Fallback na Gemini AI
+    final aiData = await processInvoice(imageBytes);
+    return (aiData, ExtractionSource.ai);
   }
 
   // --- Akcije ---
@@ -319,6 +369,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _invoiceData = null;
       _error = null;
       _editingSavedId = null;
+      _extractionSource = null;
       _resultMode = ResultMode.payInvoice;
       _state = wasOwnCode ? AppState.savedList : AppState.idle;
     });
@@ -867,6 +918,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           data: _invoiceData!,
           copied: _copied,
           image: _image,
+          extractionSource: _extractionSource,
           mode: _resultMode,
           isEditingExisting: _editingSavedId != null,
           onSave: _resultMode == ResultMode.ownCode ? _saveCurrentCode : null,

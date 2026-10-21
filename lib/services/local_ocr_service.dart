@@ -1,0 +1,113 @@
+import 'dart:io';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:path_provider/path_provider.dart';
+
+import '../models/invoice_data.dart';
+import '../utils/invoice_text_parser.dart';
+
+/// Lokalni OCR servis baziran na `google_mlkit_text_recognition`.
+///
+/// Izvršava brzo čitanje teksta na samom uređaju i pokušava ekstrakciju i
+/// Modulo-97 validaciju podataka o računu. Ako podaci nisu potpuni ili ne
+/// prolaze validaciju, vraća `null` kako bi se obrada prosledila na Gemini AI.
+class LocalOcrService {
+  /// Pokreće lokalni OCR nad bajtovima slike i vraća [InvoiceData] samo ako
+  /// izvučeni podaci prolaze strogu validaciju (Confidence Gate).
+  Future<InvoiceData?> tryExtractFromBytes(Uint8List imageBytes) async {
+    File? tempFile;
+    try {
+      final dir = await getTemporaryDirectory();
+      tempFile = File(
+        '${dir.path}/ips_ocr_scan_${DateTime.now().microsecondsSinceEpoch}.jpg',
+      );
+      await tempFile.writeAsBytes(imageBytes, flush: true);
+      return await tryExtractFromFile(tempFile.path);
+    } catch (e) {
+      debugPrint('LocalOcrService error: $e');
+      return null;
+    } finally {
+      try {
+        if (tempFile != null && await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Pokreće lokalni OCR nad fajlom slike na putanji [filePath].
+  Future<InvoiceData?> tryExtractFromFile(String filePath) async {
+    final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final inputImage = InputImage.fromFilePath(filePath);
+      final recognized = await recognizer.processImage(inputImage);
+      if (recognized.text.trim().isEmpty) return null;
+
+      // 1. Pokušaj parsiranja nad prirodnim redosledom blokova iz ML Kit-a.
+      final direct = tryParseInvoiceText(recognized.text);
+      if (direct != null) return direct;
+
+      // 2. Na uplatnicama (dve kolone: levo Primalac/Svrha, desno Iznos/Račun/Poziv)
+      // ML Kit nekada grupiše labele i vrednosti u odvojene blokove. Rekonstruiši
+      // tekst po kolonama (leva kolona od vrha ka dnu, pa desna kolona od vrha ka dnu).
+      final columnOrdered = _buildColumnOrderedText(recognized);
+      if (columnOrdered.isNotEmpty && columnOrdered != recognized.text) {
+        return tryParseInvoiceText(columnOrdered);
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('LocalOcrService processImage error: $e');
+      return null;
+    } finally {
+      await recognizer.close();
+    }
+  }
+
+  /// Sortira tekstualne linije po levoj i desnoj koloni dokumenta/uplatnice,
+  /// čime se sprečava mešanje levih labela ("Primalac") sa desnim poljima ("Model").
+  String _buildColumnOrderedText(RecognizedText recognized) {
+    final allLines = <TextLine>[];
+    for (final block in recognized.blocks) {
+      allLines.addAll(block.lines);
+    }
+    if (allLines.length < 3) return '';
+
+    var minX = double.infinity;
+    var maxX = double.negativeInfinity;
+    for (final line in allLines) {
+      minX = math.min(minX, line.boundingBox.left);
+      maxX = math.max(maxX, line.boundingBox.right);
+    }
+    if (!minX.isFinite || !maxX.isFinite || maxX <= minX) return '';
+
+    final midX = minX + (maxX - minX) * 0.45;
+    final leftCol = <TextLine>[];
+    final rightCol = <TextLine>[];
+
+    for (final line in allLines) {
+      if (line.boundingBox.left < midX) {
+        leftCol.add(line);
+      } else {
+        rightCol.add(line);
+      }
+    }
+
+    int compareByTop(TextLine a, TextLine b) =>
+        a.boundingBox.top.compareTo(b.boundingBox.top);
+
+    leftCol.sort(compareByTop);
+    rightCol.sort(compareByTop);
+
+    final buffer = StringBuffer();
+    for (final line in leftCol) {
+      buffer.writeln(line.text);
+    }
+    for (final line in rightCol) {
+      buffer.writeln(line.text);
+    }
+    return buffer.toString();
+  }
+}

@@ -38,6 +38,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Automatsko preuzimanje ML Kit modela za OCR i QR skener pri instalaciji sa Play Store-a -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr,barcode" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

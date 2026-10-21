@@ -52,3 +52,9 @@ enum CameraRes { def, hd720, fhd1080, max }
 // payInvoice: skeniran tuđi račun koji se plaća (postojeći tok).
 // ownCode: sopstveni IPS kod koji korisnik pravi da ga neko drugi skenira i plati njemu.
 enum ResultMode { payInvoice, ownCode }
+
+/// Izvor iz kog su podaci računa izvučeni:
+/// - [qr]: direktno pročitan postojeći NBS IPS QR kod sa slike/dokumenta,
+/// - [ocr]: izvučeno lokalnim OCR-om na uređaju (ML Kit),
+/// - [ai]: izvučeno pomoću Gemini AI modela.
+enum ExtractionSource { qr, ocr, ai }

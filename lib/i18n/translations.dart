@@ -13,6 +13,8 @@ class Translations {
     required this.extracting,
     required this.processingSteps,
     required this.extracted,
+    required this.extractedQr,
+    required this.extractedOcr,
     required this.amount,
     required this.recipient,
     required this.account,
@@ -85,6 +87,8 @@ class Translations {
   final String extracting;
   final List<String> processingSteps;
   final String extracted;
+  final String extractedQr;
+  final String extractedOcr;
   final String amount;
   final String recipient;
   final String account;
@@ -159,11 +163,13 @@ const translations = <Language, Translations>{
     analyzing: 'Analiziranje računa',
     extracting: 'Izvlačenje podataka pomoću AI...',
     processingSteps: [
-      'Čitanje teksta sa računa...',
+      'Provera QR koda i teksta...',
       'Prepoznavanje iznosa i računa...',
       'Provera podataka...',
     ],
     extracted: 'Podaci su pročitani',
+    extractedQr: 'Učitan postojeći IPS QR kod',
+    extractedOcr: 'Podaci su pročitani (OCR)',
     amount: 'Iznos (RSD)',
     recipient: 'Primalac',
     account: 'Račun',
@@ -247,11 +253,13 @@ const translations = <Language, Translations>{
     analyzing: 'Analyzing Invoice',
     extracting: 'Extracting payment details using AI...',
     processingSteps: [
-      'Reading receipt text...',
+      'Checking QR code & text...',
       'Detecting amount & account...',
       'Validating details...',
     ],
     extracted: 'Invoice Details Read',
+    extractedQr: 'Existing IPS QR Code Read',
+    extractedOcr: 'Invoice Details Read (OCR)',
     amount: 'Amount (RSD)',
     recipient: 'Recipient',
     account: 'Account',

@@ -153,20 +153,7 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
   }
 
   if (data.accountNumber.isNotEmpty) {
-    data.accountNumber = parseAccountNumber(data.accountNumber);
-
-    // Srpski računi su uvek PPP (3) + NNNNNNNNNNNNN (13) + KK (2) = 18 cifara.
-    // LLM ponekad vrati pogrešan broj cifara — normalizuj srednji deo.
-    if (data.accountNumber.length != 18 && data.accountNumber.length >= 5) {
-      final acc = data.accountNumber;
-      final bankPrefix = acc.substring(0, 3);
-      final checkDigits = acc.substring(acc.length - 2);
-      final middle = acc.substring(3, acc.length - 2);
-      final normalizedMiddle = middle.length <= 13
-          ? middle.padLeft(13, '0')
-          : middle.substring(middle.length - 13);
-      data.accountNumber = '$bankPrefix$normalizedMiddle$checkDigits';
-    }
+    data.accountNumber = normalizeAccountNumber(data.accountNumber);
   }
 
   if (data.amount.isNaN || data.amount < 0) {
