@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:path_provider/path_provider.dart';
@@ -19,6 +19,7 @@ import '../services/saved_codes_service.dart';
 import '../services/shared_image.dart';
 import '../theme.dart';
 import '../utils/backup.dart' as backup_utils;
+import '../utils/invoice_text_parser.dart';
 import '../utils/ips.dart';
 import '../utils/share.dart' as share_utils;
 import '../widgets/info_sheet.dart';
@@ -80,12 +81,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSavedCodes();
-    _checkSharedImage();
+    _checkSharedPayload();
     // Android WebView/intent događaji umeju da budu nepouzdani — original
     // koristi polling na 1.5s, zadržavamo isto ponašanje.
     _sharedPollTimer = Timer.periodic(
       const Duration(milliseconds: 1500),
-      (_) => _checkSharedImage(),
+      (_) => _checkSharedPayload(),
     );
   }
 
@@ -102,27 +103,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkSharedImage();
+      _checkSharedPayload();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       if (_state == AppState.capturing) _reset();
     }
   }
 
-  // --- Slika podeljena iz druge aplikacije (ACTION_SEND) ---
+  // --- Slika, PDF ili tekst podeljen iz druge aplikacije (ACTION_SEND) ---
 
-  Future<void> _checkSharedImage() async {
+  Future<void> _checkSharedPayload() async {
     if (_checkingShared || _state == AppState.processing) return;
     _checkingShared = true;
     try {
-      final bytes = await getSharedImage();
-      if (bytes != null && mounted) {
+      final payload = await getSharedPayload();
+      if (payload != null && mounted) {
         _stopCameraQueued();
-        // Slika deljena iz druge aplikacije je uvek "plati ovaj račun".
+        // Sadržaj deljen iz druge aplikacije je uvek "plati ovaj račun".
         _resultMode = ResultMode.payInvoice;
         _editingSavedId = null;
-        setState(() => _image = bytes);
-        await _processInvoice(bytes);
+        switch (payload.type) {
+          case SharedPayloadType.image:
+            setState(() => _image = payload.bytes);
+            await _processInvoice(payload.bytes!);
+          case SharedPayloadType.pdf:
+            await _processPdf(payload.bytes!);
+          case SharedPayloadType.text:
+            await _processText(payload.text!);
+        }
       }
     } finally {
       _checkingShared = false;
@@ -247,20 +255,99 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _processInvoice(bytes);
   }
 
+  Future<void> _pickPdf() async {
+    final bytes = await backup_utils.pickPdfDocumentBytes();
+    if (bytes == null || !mounted) return;
+    _resultMode = ResultMode.payInvoice;
+    _editingSavedId = null;
+    await _processPdf(bytes);
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final clip = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = clip?.text?.trim() ?? '';
+    if (!mounted) return;
+    if (text.isEmpty) {
+      _showToast(_t.clipboardEmpty);
+      return;
+    }
+    _resultMode = ResultMode.payInvoice;
+    _editingSavedId = null;
+    await _processText(text);
+  }
+
   // --- Obrada ---
 
-  Future<void> _processInvoice(Uint8List imageBytes) async {
+  Future<void> _processInvoice(Uint8List imageBytes) {
+    return _runExtraction(
+      () => _extractFromImages(
+        [imageBytes],
+        aiFallback: () => processInvoice(imageBytes),
+      ),
+    );
+  }
+
+  /// PDF: stranice se renderuju u slike (native PdfRenderer / PDFKit) i
+  /// prolaze isti QR → OCR tok kao fotografija. Ako lokalno ne uspe, Gemini-ju
+  /// se šalje originalni PDF (podržava application/pdf), ne samo jedna stranica.
+  Future<void> _processPdf(Uint8List pdfBytes) {
+    return _runExtraction(() async {
+      final pages = await renderPdfPages(pdfBytes);
+      if (pages.isEmpty) {
+        // Renderovanje nije uspelo (npr. zaštićen PDF) — probaj direktno AI.
+        final aiData = await processInvoice(pdfBytes);
+        return (aiData, ExtractionSource.ai, null);
+      }
+      return _extractFromImages(
+        pages,
+        aiFallback: () => processInvoice(pdfBytes),
+      );
+    });
+  }
+
+  /// Tekst (clipboard ili deljena poruka): IPS string → lokalni parser → Gemini
+  /// tekstualni prompt (bez slike, znatno jeftinije u tokenima).
+  Future<void> _processText(String text) {
+    setState(() => _image = null);
+    return _runExtraction(() async {
+      final ipsMatch = RegExp(r'K:(?:PR|EK)\|[^\r\n]+', caseSensitive: false)
+          .firstMatch(text);
+      if (ipsMatch != null) {
+        final ipsData = parseIpsString(ipsMatch.group(0)!);
+        if (ipsData != null && validateAccountNumber(ipsData.accountNumber)) {
+          return (ipsData, ExtractionSource.qr, null);
+        }
+      }
+      final local = tryParseInvoiceText(text);
+      if (local != null) return (local, ExtractionSource.text, null);
+
+      // Tekst bez ijednog broja (npr. podeljen link ili obična poruka) ne može
+      // sadržati račun — ne troši AI poziv.
+      if (!RegExp(r'\d{3,}').hasMatch(text)) {
+        throw Exception('ValidationFailed: tekst ne sadrži podatke za plaćanje');
+      }
+      final aiData = await processInvoiceText(text);
+      return (aiData, ExtractionSource.ai, null);
+    });
+  }
+
+  /// Zajednički okvir obrade: prikaz ProcessingView-a, prelaz na rezultat
+  /// i mapiranje grešaka (kvota / validacija / ostalo) na poruke.
+  Future<void> _runExtraction(
+    Future<(InvoiceData, ExtractionSource, Uint8List?)> Function() job,
+  ) async {
     setState(() {
       _state = AppState.processing;
       _error = null;
       _extractionSource = null;
     });
     try {
-      final (data, source) = await _extractInvoiceCascade(imageBytes);
+      final (data, source, previewImage) = await job();
       if (!mounted) return;
       setState(() {
         _invoiceData = data;
         _extractionSource = source;
+        if (previewImage != null) _image = previewImage;
         _state = AppState.result;
       });
       // Broje se samo skenirani računi — pravljenje sopstvenog IPS koda nije
@@ -285,45 +372,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Trostepena ekstrakcija:
-  /// 1. Lokalni QR skener (ako na slici već postoji NBS IPS QR kod),
+  /// Trostepena ekstrakcija nad jednom ili više slika (stranica):
+  /// 1. Lokalni QR skener na svim stranicama (postojeći NBS IPS QR kod),
   /// 2. Lokalni OCR na uređaju + Modulo-97 validacija,
-  /// 3. Fallback na Gemini AI model ako lokalne metode ne izvuku potpune podatke.
-  Future<(InvoiceData, ExtractionSource)> _extractInvoiceCascade(
-    Uint8List imageBytes,
-  ) async {
-    File? tempFile;
+  /// 3. [aiFallback] (Gemini) ako lokalne metode ne izvuku potpune podatke.
+  /// Vraća i sliku stranice na kojoj su podaci nađeni, za "Pogledaj račun".
+  Future<(InvoiceData, ExtractionSource, Uint8List?)> _extractFromImages(
+    List<Uint8List> images, {
+    required Future<InvoiceData> Function() aiFallback,
+  }) async {
+    final tempFiles = <File>[];
     try {
       final dir = await getTemporaryDirectory();
-      tempFile = File(
-        '${dir.path}/ips_scan_${DateTime.now().microsecondsSinceEpoch}.jpg',
-      );
-      await tempFile.writeAsBytes(imageBytes, flush: true);
-
-      // Korak 1: Proveri da li na računu već postoji NBS IPS QR kod (<100ms, 100% tačnost)
-      final qrData = await _qrScannerService.tryExtractIpsFromFile(tempFile.path);
-      if (qrData != null) {
-        return (qrData, ExtractionSource.qr);
+      final stamp = DateTime.now().microsecondsSinceEpoch;
+      for (var i = 0; i < images.length; i++) {
+        final f = File('${dir.path}/ips_scan_${stamp}_$i.img');
+        await f.writeAsBytes(images[i], flush: true);
+        tempFiles.add(f);
       }
 
-      // Korak 2: Pokušaj brzu lokalnu OCR ekstrakciju sa Modulo-97 proverom
-      final ocrData = await _localOcrService.tryExtractFromFile(tempFile.path);
-      if (ocrData != null) {
-        return (ocrData, ExtractionSource.ocr);
+      // Korak 1: Postojeći NBS IPS QR kod (<100ms, 100% tačnost)
+      for (var i = 0; i < tempFiles.length; i++) {
+        final qrData =
+            await _qrScannerService.tryExtractIpsFromFile(tempFiles[i].path);
+        if (qrData != null) return (qrData, ExtractionSource.qr, images[i]);
+      }
+
+      // Korak 2: Lokalni OCR sa Modulo-97 proverom
+      for (var i = 0; i < tempFiles.length; i++) {
+        final ocrData =
+            await _localOcrService.tryExtractFromFile(tempFiles[i].path);
+        if (ocrData != null) return (ocrData, ExtractionSource.ocr, images[i]);
       }
     } catch (e) {
       debugPrint('Local extraction skipped: $e');
     } finally {
-      try {
-        if (tempFile != null && await tempFile.exists()) {
-          await tempFile.delete();
-        }
-      } catch (_) {}
+      for (final f in tempFiles) {
+        try {
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
     }
 
     // Korak 3: Fallback na Gemini AI
-    final aiData = await processInvoice(imageBytes);
-    return (aiData, ExtractionSource.ai);
+    final aiData = await aiFallback();
+    return (aiData, ExtractionSource.ai, images.first);
   }
 
   // --- Akcije ---
@@ -890,6 +983,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           t: t,
           onOpenCamera: _startInvoiceCamera,
           onPickGallery: _startInvoiceGallery,
+          onPickPdf: _pickPdf,
+          onPasteClipboard: _pasteFromClipboard,
         );
       case AppState.capturing:
         return CameraView(

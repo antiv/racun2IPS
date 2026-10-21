@@ -54,7 +54,8 @@ enum CameraRes { def, hd720, fhd1080, max }
 enum ResultMode { payInvoice, ownCode }
 
 /// Izvor iz kog su podaci računa izvučeni:
-/// - [qr]: direktno pročitan postojeći NBS IPS QR kod sa slike/dokumenta,
+/// - [qr]: direktno pročitan postojeći NBS IPS QR kod (ili IPS string u tekstu),
 /// - [ocr]: izvučeno lokalnim OCR-om na uređaju (ML Kit),
+/// - [text]: izvučeno lokalnim parserom iz nalepljenog/deljenog teksta,
 /// - [ai]: izvučeno pomoću Gemini AI modela.
-enum ExtractionSource { qr, ocr, ai }
+enum ExtractionSource { qr, ocr, text, ai }

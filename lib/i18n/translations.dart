@@ -8,6 +8,9 @@ class Translations {
     required this.scanDesc,
     required this.openCamera,
     required this.uploadGallery,
+    required this.pickPdf,
+    required this.pasteClipboard,
+    required this.clipboardEmpty,
     required this.or,
     required this.analyzing,
     required this.extracting,
@@ -82,6 +85,9 @@ class Translations {
   final String scanDesc;
   final String openCamera;
   final String uploadGallery;
+  final String pickPdf;
+  final String pasteClipboard;
+  final String clipboardEmpty;
   final String or;
   final String analyzing;
   final String extracting;
@@ -159,6 +165,9 @@ const translations = <Language, Translations>{
         'Fotografišite račun da biste automatski generisali IPS QR kod za vašu bankarsku aplikaciju.',
     openCamera: 'Otvori kameru',
     uploadGallery: 'Otpremi iz galerije',
+    pickPdf: 'PDF račun',
+    pasteClipboard: 'Nalepi tekst',
+    clipboardEmpty: 'Privremena memorija ne sadrži tekst',
     or: 'Ili',
     analyzing: 'Analiziranje računa',
     extracting: 'Izvlačenje podataka pomoću AI...',
@@ -249,6 +258,9 @@ const translations = <Language, Translations>{
         'Take a photo of your invoice to automatically generate an IPS QR code for your banking app.',
     openCamera: 'Open Camera',
     uploadGallery: 'Upload from Gallery',
+    pickPdf: 'PDF invoice',
+    pasteClipboard: 'Paste text',
+    clipboardEmpty: 'Clipboard does not contain any text',
     or: 'Or',
     analyzing: 'Analyzing Invoice',
     extracting: 'Extracting payment details using AI...',

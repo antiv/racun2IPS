@@ -4,18 +4,23 @@ import 'package:url_launcher/url_launcher.dart';
 import '../i18n/translations.dart';
 import '../theme.dart';
 
-/// Početni ekran: hero dugme kamere, naslov, opis, dugmad kamera/galerija.
+/// Početni ekran: hero dugme kamere, naslov, opis, dugmad kamera/galerija,
+/// i kompaktne akcije za PDF račun i lepljenje teksta iz clipboard-a.
 class IdleView extends StatelessWidget {
   const IdleView({
     super.key,
     required this.t,
     required this.onOpenCamera,
     required this.onPickGallery,
+    required this.onPickPdf,
+    required this.onPasteClipboard,
   });
 
   final Translations t;
   final VoidCallback onOpenCamera;
   final VoidCallback onPickGallery;
+  final VoidCallback onPickPdf;
+  final VoidCallback onPasteClipboard;
 
   @override
   Widget build(BuildContext context) {
@@ -84,6 +89,26 @@ class IdleView extends StatelessWidget {
             onTap: onPickGallery,
             icon: Icons.file_upload_outlined,
             label: t.uploadGallery,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _CompactButton(
+                  onTap: onPickPdf,
+                  icon: Icons.picture_as_pdf_outlined,
+                  label: t.pickPdf,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _CompactButton(
+                  onTap: onPasteClipboard,
+                  icon: Icons.content_paste,
+                  label: t.pasteClipboard,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           GestureDetector(
@@ -197,6 +222,34 @@ class _SecondaryButton extends StatelessWidget {
         ),
         icon: Icon(icon, size: 20),
         label: Text(label),
+      ),
+    );
+  }
+}
+
+class _CompactButton extends StatelessWidget {
+  const _CompactButton({required this.onTap, required this.icon, required this.label});
+
+  final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.stone600,
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: AppColors.stone100, width: 1.5),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        icon: Icon(icon, size: 18),
+        label: FittedBox(fit: BoxFit.scaleDown, child: Text(label)),
       ),
     );
   }

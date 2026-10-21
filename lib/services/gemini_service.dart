@@ -39,12 +39,32 @@ const _prompt = '''Extract invoice details for a Serbian NBS IPS payment.
       - Purpose of Payment (Svrha uplate, max 35 characters - DO NOT truncate, return full text as-is)
       - Reference Number (Poziv na broj, max 25 characters. MUST include model without spaces. Dash '-' is allowed, EXCEPT for model 97 where dashes are forbidden. If NO model is found, prepend 00.)''';
 
-/// Šalje sliku računa Gemini API-ju i izvlači podatke za plaćanje.
+/// Šalje sliku (ili PDF) računa Gemini API-ju i izvlači podatke za plaćanje.
 ///
 /// Obavezna polja koja nedostaju ostaju prazni stringovi, tako da forma
 /// prikaže inline validacione greške.
 /// Baca [Exception] sa "429"/"Quota exceeded" u poruci kod prekoračenja kvote.
 Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
+  return _callGemini([
+    {'text': _prompt},
+    {
+      'inlineData': {
+        'mimeType': _detectMimeType(imageBytes),
+        'data': base64Encode(imageBytes),
+      }
+    },
+  ]);
+}
+
+/// Šalje neformalan ili nestrukturiran tekst računa/poruke Gemini API-ju
+/// (kada lokalni regex parser ne može pouzdano da izvuče sva polja).
+Future<InvoiceData> processInvoiceText(String invoiceText) async {
+  return _callGemini([
+    {'text': '$_prompt\n\nInvoice text:\n$invoiceText'},
+  ]);
+}
+
+Future<InvoiceData> _callGemini(List<Map<String, dynamic>> parts) async {
   final apiKey = _apiKey;
   if (apiKey.isEmpty) {
     final keyName = Platform.isAndroid
@@ -85,17 +105,7 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
       options: Options(headers: headers),
       data: {
         'contents': [
-          {
-            'parts': [
-              {'text': _prompt},
-              {
-                'inlineData': {
-                  'mimeType': _detectMimeType(imageBytes),
-                  'data': base64Encode(imageBytes),
-                }
-              },
-            ]
-          }
+          {'parts': parts}
         ],
         'generationConfig': {
           'responseMimeType': 'application/json',
@@ -105,7 +115,8 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
               'recipientName': {'type': 'STRING'},
               'accountNumber': {
                 'type': 'STRING',
-                'description': 'Account number, e.g. 115-12345-88 or full 18 digits',
+                'description':
+                    'Account number, e.g. 115-12345-88 or full 18 digits',
               },
               'amount': {'type': 'NUMBER'},
               'paymentCode': {'type': 'STRING'},
@@ -163,8 +174,15 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
   return data;
 }
 
-/// Određuje MIME tip slike na osnovu potpisa (magic bytes).
+/// Određuje MIME tip slike ili PDF dokumenta na osnovu potpisa (magic bytes).
 String _detectMimeType(Uint8List bytes) {
+  if (bytes.length >= 4 &&
+      bytes[0] == 0x25 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x44 &&
+      bytes[3] == 0x46) {
+    return 'application/pdf';
+  }
   if (bytes.length >= 3 &&
       bytes[0] == 0xFF &&
       bytes[1] == 0xD8 &&
