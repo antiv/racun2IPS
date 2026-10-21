@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../i18n/translations.dart';
 import '../models/invoice_data.dart';
@@ -269,7 +270,7 @@ class _CameraViewState extends State<CameraView>
                   size: 50,
                   onTap: widget.onBack,
                   child: const Icon(
-                    Icons.arrow_back,
+                    LucideIcons.arrowLeft,
                     color: Colors.white,
                     size: 24,
                   ),
@@ -307,7 +308,7 @@ class _CameraViewState extends State<CameraView>
                     color: widget.torchOn ? AppColors.emerald500 : null,
                     onTap: widget.onToggleTorch,
                     child: Icon(
-                      widget.torchOn ? Icons.bolt : Icons.flash_off,
+                      widget.torchOn ? LucideIcons.zap : LucideIcons.zapOff,
                       color: Colors.white,
                       size: 22,
                     ),

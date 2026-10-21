@@ -57,7 +57,7 @@ class _EditableRowState extends State<EditableRow> {
     final hasError = widget.error || isOverLimit;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -65,12 +65,11 @@ class _EditableRowState extends State<EditableRow> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.label.toUpperCase(),
+                widget.label,
                 style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.05,
-                  color: hasError ? AppColors.red400 : AppColors.stone400,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: hasError ? AppColors.red600 : AppColors.stone500,
                 ),
               ),
               if (showCounter)
@@ -89,7 +88,7 @@ class _EditableRowState extends State<EditableRow> {
                 ),
             ],
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           TextField(
             controller: _controller,
             onChanged: widget.onChanged,
@@ -102,10 +101,11 @@ class _EditableRowState extends State<EditableRow> {
               hintStyle: const TextStyle(color: AppColors.stone300),
             ),
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 14.5,
               fontWeight: FontWeight.w500,
-              fontFamily: widget.isMono ? 'monospace' : null,
-              color: hasError ? AppColors.red600 : AppColors.stone800,
+              fontFeatures:
+                  widget.isMono ? const [FontFeature.tabularFigures()] : null,
+              color: hasError ? AppColors.red600 : AppColors.stone900,
             ),
           ),
         ],

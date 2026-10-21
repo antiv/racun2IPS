@@ -92,6 +92,23 @@ class Translations {
     required this.reviewMessage,
     required this.reviewRate,
     required this.reviewLater,
+    required this.menu,
+    required this.language,
+    required this.back,
+    required this.showAll,
+    required this.pinnedSection,
+    required this.otherSection,
+    required this.paymentDetails,
+    required this.add,
+    required this.resultReady,
+    required this.sourceQr,
+    required this.sourceOcr,
+    required this.sourceText,
+    required this.sourceAi,
+    required this.showQr,
+    required this.markPaidShort,
+    required this.saveInvoice,
+    required this.newInvoice,
   });
 
   final String title;
@@ -184,6 +201,23 @@ class Translations {
   final String reviewMessage;
   final String reviewRate;
   final String reviewLater;
+  final String menu;
+  final String language;
+  final String back;
+  final String showAll;
+  final String pinnedSection;
+  final String otherSection;
+  final String paymentDetails;
+  final String add;
+  final String resultReady;
+  final String sourceQr;
+  final String sourceOcr;
+  final String sourceText;
+  final String sourceAi;
+  final String showQr;
+  final String markPaidShort;
+  final String saveInvoice;
+  final String newInvoice;
 }
 
 const translations = <Language, Translations>{
@@ -192,9 +226,9 @@ const translations = <Language, Translations>{
     subtitle: 'Skeniraj i plati IPS-om',
     scanTitle: 'Skenirajte račun',
     scanDesc:
-        'Fotografišite račun da biste automatski generisali IPS QR kod za vašu bankarsku aplikaciju.',
+        'Fotografišite račun i dobijte IPS QR kod za vašu bankarsku aplikaciju.',
     openCamera: 'Otvori kameru',
-    uploadGallery: 'Otpremi iz galerije',
+    uploadGallery: 'Galerija',
     pickPdf: 'PDF račun',
     pasteClipboard: 'Nalepi tekst',
     clipboardEmpty: 'Privremena memorija ne sadrži tekst',
@@ -242,13 +276,13 @@ const translations = <Language, Translations>{
     res720p: 'HD (720p)',
     res1080p: 'Full HD (1080p)',
     resMax: 'Maksimalna (4K)',
-    viewInvoice: 'Pogledaj skeniran račun',
+    viewInvoice: 'Račun',
     invalidFormNote:
         'Popunite i ispravite sva obavezna polja označena crvenom bojom da bi QR kod bio validan.',
     savedCodesTitle: 'Sačuvani kodovi',
-    searchHint: 'Pretraga po primaocu, računu ili svrsi',
+    searchHint: 'Pretraga po primaocu ili računu',
     filterAll: 'Svi',
-    filterBills: 'Računi za plaćanje',
+    filterBills: 'Računi',
     filterOwn: 'Moji kodovi',
     pin: 'Zakači na vrh',
     unpin: 'Otkači sa vrha',
@@ -295,15 +329,32 @@ const translations = <Language, Translations>{
         'Ocena u prodavnici aplikacija mnogo znači i pomaže drugima da pronađu aplikaciju.',
     reviewRate: 'Oceni aplikaciju',
     reviewLater: 'Možda kasnije',
+    menu: 'Meni',
+    language: 'Jezik',
+    back: 'Nazad',
+    showAll: 'Prikaži sve',
+    pinnedSection: 'Prikačeno',
+    otherSection: 'Ostalo',
+    paymentDetails: 'Podaci za plaćanje',
+    add: 'Dodaj',
+    resultReady: 'IPS kod je spreman',
+    sourceQr: 'Iz QR koda',
+    sourceOcr: 'Pročitano sa računa',
+    sourceText: 'Iz teksta',
+    sourceAi: 'Izdvojeno AI-jem',
+    showQr: 'Prikaži QR',
+    markPaidShort: 'Označi plaćeno',
+    saveInvoice: 'Sačuvaj račun',
+    newInvoice: 'Novi račun',
   ),
   Language.en: Translations(
     title: 'Invoice2IPS',
     subtitle: 'Instant Pay Scan & Generate',
     scanTitle: 'Scan Your Invoice',
     scanDesc:
-        'Take a photo of your invoice to automatically generate an IPS QR code for your banking app.',
+        'Snap your invoice and get an IPS QR code for your banking app.',
     openCamera: 'Open Camera',
-    uploadGallery: 'Upload from Gallery',
+    uploadGallery: 'Gallery',
     pickPdf: 'PDF invoice',
     pasteClipboard: 'Paste text',
     clipboardEmpty: 'Clipboard does not contain any text',
@@ -350,13 +401,13 @@ const translations = <Language, Translations>{
     res720p: 'HD (720p)',
     res1080p: 'Full HD (1080p)',
     resMax: 'Maximum (4K)',
-    viewInvoice: 'View scanned invoice',
+    viewInvoice: 'Invoice',
     invalidFormNote:
         'Fill in and correct all required fields marked in red for the QR code to be valid.',
     savedCodesTitle: 'Saved codes',
-    searchHint: 'Search by recipient, account or purpose',
+    searchHint: 'Search by recipient or account',
     filterAll: 'All',
-    filterBills: 'Bills to pay',
+    filterBills: 'Bills',
     filterOwn: 'My codes',
     pin: 'Pin to top',
     unpin: 'Unpin',
@@ -401,5 +452,22 @@ const translations = <Language, Translations>{
         'A rating in the app store means a lot and helps others discover the app.',
     reviewRate: 'Rate the app',
     reviewLater: 'Maybe later',
+    menu: 'Menu',
+    language: 'Language',
+    back: 'Back',
+    showAll: 'See all',
+    pinnedSection: 'Pinned',
+    otherSection: 'Others',
+    paymentDetails: 'Payment details',
+    add: 'Add',
+    resultReady: 'IPS code is ready',
+    sourceQr: 'From QR code',
+    sourceOcr: 'Read from invoice',
+    sourceText: 'From text',
+    sourceAi: 'Extracted by AI',
+    showQr: 'Show QR',
+    markPaidShort: 'Mark paid',
+    saveInvoice: 'Save invoice',
+    newInvoice: 'New invoice',
   ),
 };

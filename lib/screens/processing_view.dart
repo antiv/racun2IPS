@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../i18n/translations.dart';
 import '../theme.dart';
@@ -121,7 +122,7 @@ class _ProcessingViewState extends State<ProcessingView>
                     clipBehavior: Clip.none,
                     children: [
                       const Icon(
-                        Icons.smart_toy_outlined,
+                        LucideIcons.bot,
                         size: 50,
                         color: AppColors.emerald600,
                       ),
@@ -134,7 +135,7 @@ class _ProcessingViewState extends State<ProcessingView>
                             TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 1),
                           ]).animate(_sparkle),
                           child: const Icon(
-                            Icons.auto_awesome,
+                            LucideIcons.sparkles,
                             size: 17,
                             color: AppColors.amber400,
                           ),
@@ -185,7 +186,7 @@ class _ProcessingViewState extends State<ProcessingView>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.error_outline, size: 19, color: AppColors.amber500),
+                const Icon(LucideIcons.circleAlert, size: 19, color: AppColors.amber500),
                 const SizedBox(width: 11),
                 Expanded(
                   child: Text(

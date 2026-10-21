@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../i18n/translations.dart';
 import '../theme.dart';
@@ -40,7 +41,7 @@ Future<bool?> showReviewSheet(BuildContext context, Translations t) {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.star_rounded,
+                LucideIcons.star,
                 size: 36,
                 color: AppColors.emerald600,
               ),
@@ -78,7 +79,8 @@ Future<bool?> showReviewSheet(BuildContext context, Translations t) {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  textStyle: const TextStyle(
+                  fontFamily: kFontFamily,fontWeight: FontWeight.w700),
                 ),
                 child: Text(t.reviewRate),
               ),
@@ -94,7 +96,8 @@ Future<bool?> showReviewSheet(BuildContext context, Translations t) {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                  textStyle: const TextStyle(
+                  fontFamily: kFontFamily,fontWeight: FontWeight.w600),
                 ),
                 child: Text(t.reviewLater),
               ),

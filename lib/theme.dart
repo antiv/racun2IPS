@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// Font aplikacije (Inter, assets/fonts). Navodi se i eksplicitno u
+/// `styleFrom(textStyle: ...)` dugmadi, jer taj stil ne nasleđuje font teme.
+const kFontFamily = 'Inter';
+
 /// Paleta preslikana sa Tailwind klasa originalnog (Tauri/React) dizajna.
 class AppColors {
   AppColors._();

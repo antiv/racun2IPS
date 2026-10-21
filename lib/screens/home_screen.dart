@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../i18n/translations.dart';
@@ -22,9 +23,12 @@ import '../utils/backup.dart' as backup_utils;
 import '../utils/invoice_text_parser.dart';
 import '../utils/ips.dart';
 import '../utils/share.dart' as share_utils;
+import '../widgets/app_menu_sheet.dart';
 import '../widgets/info_sheet.dart';
+import '../widgets/quick_qr_sheet.dart';
 import '../widgets/review_sheet.dart';
 import 'camera_view.dart';
+import 'edit_saved_code_screen.dart';
 import 'error_view.dart';
 import 'idle_view.dart';
 import 'processing_view.dart';
@@ -545,14 +549,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             await _loadSavedCodes();
           },
           onCopy: _handleCopy,
-          onShare: (code) => share_utils.shareQrCode(
-            generateIpsString(
-              code.data,
-              allowOpenAmount: code.kind == SavedCodeKind.ownAccount,
-            ),
-            _t.title,
-            _t.shareDesc,
-          ),
+          onShare: _shareSavedCode,
           onStartCamera: _startOwnCodeCamera,
           onStartGallery: () => _startOwnCodeGallery(),
           onExport: _exportSavedCodes,
@@ -746,7 +743,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ],
                       ),
                       child: const Icon(
-                        Icons.close,
+                        LucideIcons.x,
                         size: 20,
                         color: AppColors.stone600,
                       ),
@@ -767,16 +764,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final t = _t;
     final toastMessage = _toastText;
-    return Scaffold(
-      backgroundColor: AppColors.stone50,
-      body: GestureDetector(
+    return PopScope(
+      canPop: _state == AppState.idle,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _reset();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.stone50,
+        body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 448),
             child: Container(
-              color: Colors.white,
+              color: AppColors.stone50,
               child: Stack(
                 children: [
                   Column(
@@ -838,7 +841,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             child: Row(
                               children: [
                                 const Icon(
-                                  Icons.check_circle_outline,
+                                  LucideIcons.circleCheck,
                                   size: 18,
                                   color: AppColors.emerald400,
                                 ),
@@ -866,153 +869,205 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHeader(Translations t) {
     final topInset = MediaQuery.of(context).padding.top;
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, topInset + 10, 16, 11),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.stone100)),
+    final isIdle = _state == AppState.idle;
+    final isResult = _state == AppState.result;
+    final image = _image;
+    const wordmark = Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: 'Invoice',
+            style: TextStyle(color: AppColors.emerald600),
+          ),
+          TextSpan(
+            text: '2IPS',
+            style: TextStyle(color: AppColors.stone900),
+          ),
+        ],
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.4,
+      ),
+    );
+
+    if (isIdle) {
+      return Padding(
+        padding: EdgeInsets.fromLTRB(20, topInset + 10, 8, 8),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.emerald600,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(LucideIcons.qrCode, size: 18, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(child: wordmark),
+            _HeaderIconButton(
+              icon: LucideIcons.ellipsisVertical,
+              tooltip: t.menu,
+              onTap: _openMenu,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Van početnog ekrana: nazad levo, naslov ekrana i (na rezultatu)
+    // dugme za pregled fotografije računa desno.
+    final title = !isResult
+        ? null
+        : _resultMode == ResultMode.ownCode
+            ? t.ownCodeBannerTitle
+            : t.resultReady;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(8, topInset + 10, 16, 6),
       child: Row(
         children: [
-          // Levi deo: ikona + naziv
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x4D059669),
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                  spreadRadius: -3,
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Image.asset('assets/images/app-icon.png', fit: BoxFit.cover),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: RichText(
-                    maxLines: 1,
-                    softWrap: false,
-                    text: const TextSpan(
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.34,
-                        height: 1.1,
-                      ),
-                      children: [
-                        TextSpan(
-                          text: 'Invoice',
-                          style: TextStyle(color: AppColors.emerald600),
-                        ),
-                        TextSpan(
-                          text: '2IPS',
-                          style: TextStyle(color: AppColors.stone900),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  t.subtitle.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.6,
-                    color: AppColors.stone400,
-                  ),
-                ),
-              ],
-            ),
+          _HeaderIconButton(
+            icon: LucideIcons.arrowLeft,
+            tooltip: t.back,
+            color: AppColors.stone800,
+            onTap: _reset,
           ),
           const SizedBox(width: 8),
-          // Desni deo: info, jezik, sačuvani kodovi/nazad
-          _HeaderIconButton(
-            icon: Icons.info_outline,
-            tooltip: t.infoTitle,
-            onTap: () => showInfoSheet(context, t),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.all(2.5),
-            decoration: BoxDecoration(
-              color: AppColors.stone100,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Row(
-              children: [
-                for (final l in Language.values)
-                  GestureDetector(
-                    onTap: () => setState(() => _lang = l),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _lang == l ? Colors.white : Colors.transparent,
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: _lang == l
-                            ? const [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 2,
-                                  offset: Offset(0, 1),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Text(
-                        l.name.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                          color: _lang == l
-                              ? AppColors.stone800
-                              : AppColors.stone400,
-                        ),
-                      ),
+          Expanded(
+            child: title == null
+                ? const Align(alignment: Alignment.centerLeft, child: wordmark)
+                : Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.stone900,
                     ),
                   ),
-              ],
-            ),
           ),
-          const SizedBox(width: 6),
-          _state == AppState.idle
-              ? _HeaderIconButton(
-                  icon: Icons.qr_code_2,
-                  tooltip: t.savedCodesTitle,
-                  onTap: _openSavedList,
-                )
-              : _HeaderIconButton(icon: _headerSecondaryIcon, onTap: _reset),
+          if (isResult && image != null)
+            OutlinedButton.icon(
+              onPressed: _showImagePreview,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.stone700,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: AppColors.stone200),
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: const StadiumBorder(),
+                textStyle: const TextStyle(
+                  fontFamily: kFontFamily,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              icon: const Icon(LucideIcons.image, size: 15, color: AppColors.stone600),
+              label: Text(t.viewInvoice),
+            ),
         ],
       ),
     );
   }
 
-  IconData get _headerSecondaryIcon {
-    if (_resultMode == ResultMode.ownCode) return Icons.arrow_back;
-    return Icons.refresh;
+  void _openMenu() {
+    showAppMenuSheet(
+      context,
+      t: _t,
+      language: _lang,
+      onLanguageChanged: (l) => setState(() => _lang = l),
+      onInfo: () => showInfoSheet(context, _t),
+      onExport: _exportSavedCodes,
+      onImport: _importSavedCodes,
+      onRate: _rateApp,
+    );
+  }
+
+  /// Ocenjivanje iz menija: Android otvara stranicu u Play prodavnici, iOS
+  /// sistemski prompt (App Store stranica zahteva appStoreId).
+  Future<void> _rateApp() async {
+    final review = InAppReview.instance;
+    if (Platform.isAndroid) {
+      await review.openStoreListing();
+    } else if (await review.isAvailable()) {
+      await review.requestReview();
+    }
+  }
+
+  /// Brzi QR prikaz sačuvanog koda sa početnog ekrana — isti sheet kao na
+  /// ekranu sačuvanih kodova.
+  void _openSavedCode(SavedCode code) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => QuickQrSheet(
+        t: _t,
+        code: code,
+        onCopy: _handleCopy,
+        onShare: () => _shareSavedCode(code),
+        // Lokalna izmena objekta da sheet odmah prikaže novo stanje.
+        onTogglePin: () async {
+          code.isPinned = !code.isPinned;
+          await _savedCodesService.togglePin(code.id);
+          await _loadSavedCodes();
+        },
+        onTogglePaid: () async {
+          code.lastPaidAt = code.isPaidThisMonth ? null : DateTime.now();
+          await _savedCodesService.togglePaidThisMonth(code.id);
+          await _loadSavedCodes();
+        },
+        onAmountUpdated: (amt) async {
+          code.data.amount = amt;
+          await _savedCodesService.updateAmount(code.id, amt);
+          await _loadSavedCodes();
+        },
+        onEditDetails: () {
+          // QuickQrSheet se sam zatvara pre onEditDetails poziva.
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => EditSavedCodeScreen(
+                t: _t,
+                code: code,
+                isEditingExisting: true,
+                onSave: (updated) async {
+                  await _savedCodesService.update(
+                    updated.id,
+                    updated.data,
+                    title: updated.title,
+                  );
+                  await _loadSavedCodes();
+                },
+                onDelete: (id) => _deleteSavedCode(id),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _shareSavedCode(SavedCode code) {
+    return share_utils.shareQrCode(
+      generateIpsString(
+        code.data,
+        allowOpenAmount: code.kind == SavedCodeKind.ownAccount,
+      ),
+      _t.title,
+      _t.shareDesc,
+    );
   }
 
   Widget _buildBody(Translations t) {
@@ -1025,6 +1080,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           onPickGallery: _startInvoiceGallery,
           onPickPdf: _pickPdf,
           onPasteClipboard: _pasteFromClipboard,
+          savedCodes: _savedCodes,
+          onOpenSavedList: _openSavedList,
+          onOpenSavedCode: _openSavedCode,
         );
       case AppState.capturing:
         return CameraView(
@@ -1052,7 +1110,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           t: t,
           data: _invoiceData!,
           copied: _copied,
-          image: _image,
           extractionSource: _extractionSource,
           mode: _resultMode,
           isEditingExisting: _editingSavedId != null,
@@ -1066,7 +1123,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           onCopy: _handleCopy,
           onShare: _handleShare,
           onReset: _reset,
-          onViewImage: _showImagePreview,
         );
       case AppState.error:
         return ErrorView(
@@ -1086,11 +1142,13 @@ class _HeaderIconButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.tooltip,
+    this.color = AppColors.stone600,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1101,9 +1159,9 @@ class _HeaderIconButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: SizedBox(
-          width: 34,
-          height: 34,
-          child: Icon(icon, size: 20, color: AppColors.stone400),
+          width: 44,
+          height: 44,
+          child: Icon(icon, size: 22, color: color),
         ),
       ),
     );

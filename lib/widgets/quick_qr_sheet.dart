@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -140,7 +141,7 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                 IconButton(
                   tooltip: code.isPinned ? t.unpin : t.pin,
                   icon: Icon(
-                    code.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    code.isPinned ? LucideIcons.pin : LucideIcons.pinOff,
                     size: 20,
                     color: code.isPinned
                         ? AppColors.emerald600
@@ -152,7 +153,7 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, size: 20, color: AppColors.stone400),
+                  icon: const Icon(LucideIcons.x, size: 20, color: AppColors.stone400),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -319,7 +320,7 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     icon: Icon(
-                      _copied ? Icons.check_circle_outline : Icons.copy,
+                      _copied ? LucideIcons.circleCheck : LucideIcons.copy,
                       size: 16,
                       color: _copied
                           ? AppColors.emerald600
@@ -346,7 +347,7 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    icon: const Icon(Icons.share_outlined,
+                    icon: const Icon(LucideIcons.share2,
                         size: 16, color: AppColors.stone700),
                     label: Text(
                       t.share,
@@ -385,8 +386,8 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                   ),
                   icon: Icon(
                     code.isPaidThisMonth
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
+                        ? LucideIcons.circleCheck
+                        : LucideIcons.circle,
                     size: 18,
                   ),
                   label: Text(

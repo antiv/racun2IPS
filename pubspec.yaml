@@ -41,6 +41,7 @@ dependencies:
   google_mlkit_text_recognition: ^0.17.1
   # Lokalna detekcija postojećeg NBS IPS QR koda na slici računa.
   google_mlkit_barcode_scanning: ^0.16.1
+  lucide_icons_flutter: ^4.0.1
 
 dev_dependencies:
   flutter_test:
@@ -54,3 +55,15 @@ flutter:
   assets:
     - assets/icon/
     - assets/images/
+
+  # Inter (OFL, assets/fonts/OFL.txt) — font iz dizajna.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

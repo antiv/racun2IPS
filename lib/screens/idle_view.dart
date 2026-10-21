@@ -1,14 +1,127 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../i18n/translations.dart';
+import '../models/saved_code.dart';
 import '../theme.dart';
+import '../widgets/saved_code_tile.dart';
 
-/// Početni ekran: hero dugme kamere, naslov, opis, dugmad kamera/galerija,
-/// i kompaktne akcije za PDF račun i lepljenje teksta iz clipboard-a.
+/// Početni ekran: kartica za skeniranje (kamera, galerija, PDF, tekst iz
+/// clipboard-a) i sekcija sa nekoliko sačuvanih kodova (prikačeni prvi).
 class IdleView extends StatelessWidget {
   const IdleView({
     super.key,
+    required this.t,
+    required this.savedCodes,
+    required this.onOpenCamera,
+    required this.onPickGallery,
+    required this.onPickPdf,
+    required this.onPasteClipboard,
+    required this.onOpenSavedList,
+    required this.onOpenSavedCode,
+  });
+
+  // Broj sačuvanih kodova prikazanih na početnom ekranu.
+  static const _previewCount = 3;
+
+  final Translations t;
+  final List<SavedCode> savedCodes;
+  final VoidCallback onOpenCamera;
+  final VoidCallback onPickGallery;
+  final VoidCallback onPickPdf;
+  final VoidCallback onPasteClipboard;
+  final VoidCallback onOpenSavedList;
+  final ValueChanged<SavedCode> onOpenSavedCode;
+
+  List<SavedCode> get _preview {
+    final list = [...savedCodes]
+      ..sort((a, b) {
+        if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+    return list.take(_previewCount).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + bottomInset),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ScanCard(
+                      t: t,
+                      onOpenCamera: onOpenCamera,
+                      onPickGallery: onPickGallery,
+                      onPickPdf: onPickPdf,
+                      onPasteClipboard: onPasteClipboard,
+                    ),
+                    const SizedBox(height: 22),
+                    _SavedSection(
+                      t: t,
+                      total: savedCodes.length,
+                      codes: _preview,
+                      onOpenList: onOpenSavedList,
+                      onOpenCode: onOpenSavedCode,
+                    ),
+                    const Spacer(),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => launchUrl(
+                          Uri.parse('https://antonijevic.rs'),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        child: Opacity(
+                          opacity: 0.4,
+                          child: ColorFiltered(
+                            colorFilter: const ColorFilter.matrix(<double>[
+                              0.2126, 0.7152, 0.0722, 0, 0,
+                              0.2126, 0.7152, 0.0722, 0, 0,
+                              0.2126, 0.7152, 0.0722, 0, 0,
+                              0, 0, 0, 1, 0,
+                            ]),
+                            child: Image.asset('assets/images/ant-biocode.png', height: 15),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Bela kartica sa tankom ivicom — osnovni kontejner na početnom ekranu.
+BoxDecoration _cardDecoration(double radius) => BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: AppColors.stone200),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0A1C1917),
+          blurRadius: 2,
+          offset: Offset(0, 1),
+        ),
+      ],
+    );
+
+class _ScanCard extends StatelessWidget {
+  const _ScanCard({
     required this.t,
     required this.onOpenCamera,
     required this.onPickGallery,
@@ -24,171 +137,115 @@ class IdleView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(22, 16, 22, 16 + bottomInset),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Tooltip(
+                message: t.openCamera,
+                child: GestureDetector(
+                  onTap: onOpenCamera,
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.emerald50,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      LucideIcons.camera,
+                      size: 28,
+                      color: AppColors.emerald600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Spacer(),
-                    _HeroCameraButton(onTap: onOpenCamera, tooltip: t.openCamera),
-                    const SizedBox(height: 16),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        t.scanTitle,
-                        style: const TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                          color: AppColors.stone800,
-                        ),
+                    Text(
+                      t.scanTitle,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.4,
+                        color: AppColors.stone900,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 280),
-                      child: Text(
-                        t.scanDesc,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.5,
-                          color: AppColors.stone500,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    const SizedBox(height: 12),
-                    _PrimaryButton(
-                      onTap: onOpenCamera,
-                      icon: Icons.photo_camera_outlined,
-                      label: t.openCamera,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Expanded(child: Divider(color: AppColors.stone100, height: 1)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          child: Text(
-                            t.or.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.76,
-                              color: AppColors.stone300,
-                            ),
-                          ),
-                        ),
-                        const Expanded(child: Divider(color: AppColors.stone100, height: 1)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _SecondaryButton(
-                      onTap: onPickGallery,
-                      icon: Icons.file_upload_outlined,
-                      label: t.uploadGallery,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CompactButton(
-                            onTap: onPickPdf,
-                            icon: Icons.picture_as_pdf_outlined,
-                            label: t.pickPdf,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _CompactButton(
-                            onTap: onPasteClipboard,
-                            icon: Icons.content_paste,
-                            label: t.pasteClipboard,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: () => launchUrl(
-                        Uri.parse('https://antonijevic.rs'),
-                        mode: LaunchMode.externalApplication,
-                      ),
-                      child: Opacity(
-                        opacity: 0.4,
-                        child: ColorFiltered(
-                          colorFilter: const ColorFilter.matrix(<double>[
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0.2126, 0.7152, 0.0722, 0, 0,
-                            0, 0, 0, 1, 0,
-                          ]),
-                          child: Image.asset('assets/images/ant-biocode.png', height: 15),
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      t.scanDesc,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        height: 1.45,
+                        color: AppColors.stone500,
                       ),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: onOpenCamera,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.emerald600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(
+                  fontFamily: kFontFamily,fontSize: 15.5, fontWeight: FontWeight.w600),
+                elevation: 0,
+              ),
+              icon: const Icon(LucideIcons.camera, size: 20),
+              label: Text(t.openCamera, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _HeroCameraButton extends StatelessWidget {
-  const _HeroCameraButton({required this.onTap, required this.tooltip});
-
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 112,
-          height: 112,
-          decoration: BoxDecoration(
-            color: AppColors.emerald50,
-            borderRadius: BorderRadius.circular(32),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x803D5E33),
-                blurRadius: 30,
-                offset: Offset(0, 10),
-                spreadRadius: -12,
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _SourceButton(
+                  onTap: onPickGallery,
+                  icon: LucideIcons.image,
+                  label: t.uploadGallery,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SourceButton(
+                  onTap: onPickPdf,
+                  icon: LucideIcons.fileText,
+                  label: t.pickPdf,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SourceButton(
+                  onTap: onPasteClipboard,
+                  icon: LucideIcons.clipboard,
+                  label: t.pasteClipboard,
+                ),
               ),
             ],
-            border: Border.all(color: Colors.white, width: 4),
           ),
-          child: const Center(
-            child: Icon(
-              Icons.camera_alt_rounded,
-              size: 50,
-              color: AppColors.emerald600,
-            ),
-          ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.onTap, required this.icon, required this.label});
+/// Dugme sa ikonom iznad teksta za alternativne izvore (galerija, PDF, tekst).
+class _SourceButton extends StatelessWidget {
+  const _SourceButton({required this.onTap, required this.icon, required this.label});
 
   final VoidCallback onTap;
   final IconData icon;
@@ -197,98 +254,230 @@ class _PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: FilledButton.icon(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.emerald600,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          elevation: 0,
-        ),
-        icon: Icon(icon, size: 20),
-        label: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1),
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryButton extends StatelessWidget {
-  const _SecondaryButton({required this.onTap, required this.icon, required this.label});
-
-  final VoidCallback onTap;
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 54,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.stone600,
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: AppColors.stone100, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        icon: Icon(icon, size: 20),
-        label: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(label, maxLines: 1),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactButton extends StatelessWidget {
-  const _CompactButton({required this.onTap, required this.icon, required this.label});
-
-  final VoidCallback onTap;
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
+      height: 64,
       child: OutlinedButton(
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.stone600,
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: AppColors.stone100, width: 1.5),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          backgroundColor: AppColors.stone50,
+          side: const BorderSide(color: AppColors.stone200),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
-        child: Row(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 6),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.stone700,
-                  ),
-                ),
+            Icon(icon, size: 20),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.stone700,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedSection extends StatelessWidget {
+  const _SavedSection({
+    required this.t,
+    required this.total,
+    required this.codes,
+    required this.onOpenList,
+    required this.onOpenCode,
+  });
+
+  final Translations t;
+  final int total;
+  final List<SavedCode> codes;
+  final VoidCallback onOpenList;
+  final ValueChanged<SavedCode> onOpenCode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        t.savedCodesTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                          color: AppColors.stone900,
+                        ),
+                      ),
+                    ),
+                    if (total > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.stone100,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$total',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.stone600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: onOpenList,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.emerald700,
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.only(left: 10, right: 4),
+                  textStyle: const TextStyle(
+                  fontFamily: kFontFamily,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(t.showAll),
+                    const Icon(LucideIcons.chevronRight, size: 16),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (codes.isEmpty)
+          _EmptySavedCard(t: t, onTap: onOpenList)
+        else
+          Container(
+            decoration: _cardDecoration(20),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (var i = 0; i < codes.length; i++) ...[
+                  if (i > 0)
+                    const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => onOpenCode(codes[i]),
+                      child: SavedCodeTile(
+                        t: t,
+                        code: codes[i],
+                        subtitle: _subtitle(codes[i]),
+                        trailing: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.emerald50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            LucideIcons.qrCode,
+                            size: 20,
+                            color: AppColors.emerald700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _subtitle(SavedCode code) {
+    final recipient = code.title.isNotEmpty && code.data.recipientName.isNotEmpty
+        ? code.data.recipientName
+        : SavedCodeTile.maskedAccount(code);
+    return '$recipient · ${SavedCodeTile.amountLabel(code, t)}';
+  }
+}
+
+class _EmptySavedCard extends StatelessWidget {
+  const _EmptySavedCard({required this.t, required this.onTap});
+
+  final Translations t;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: _cardDecoration(20),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.stone100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(LucideIcons.qrCode, size: 22, color: AppColors.stone500),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.noSavedCodesTitle,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.stone800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      t.noSavedCodesDesc,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: AppColors.stone500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(LucideIcons.circlePlus, size: 20, color: AppColors.emerald600),
+            ],
+          ),
         ),
       ),
     );

@@ -39,6 +39,7 @@ class Invoice2IpsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: kFontFamily,
         scaffoldBackgroundColor: AppColors.stone50,
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.emerald600,
@@ -51,6 +52,11 @@ class Invoice2IpsApp extends StatelessWidget {
         ),
         inputDecorationTheme: const InputDecorationTheme(
           border: InputBorder.none,
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         ),
       ),
       home: const HomeScreen(),

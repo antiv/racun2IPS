@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../constants/payment_codes.dart';
 import '../theme.dart';
@@ -28,20 +29,19 @@ class EditableSelectRow extends StatelessWidget {
     return InkWell(
       onTap: () => _showPicker(context),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             Flexible(
               flex: 0,
               child: Text(
-                label.toUpperCase(),
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.05,
-                  color: error ? AppColors.red400 : AppColors.stone400,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: error ? AppColors.red600 : AppColors.stone500,
                 ),
               ),
             ),
@@ -52,14 +52,15 @@ class EditableSelectRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  fontSize: 13.5,
-                  color: error ? AppColors.red600 : AppColors.stone600,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w500,
+                  color: error ? AppColors.red600 : AppColors.stone900,
                 ),
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down,
-                size: 18, color: AppColors.stone300),
+            const Icon(LucideIcons.chevronDown,
+                size: 18, color: AppColors.stone400),
           ],
         ),
       ),

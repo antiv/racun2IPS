@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter/services.dart';
 
 import '../i18n/translations.dart';
@@ -83,28 +84,22 @@ class _EditSavedCodeScreenState extends State<EditSavedCodeScreen> {
     return Scaffold(
       backgroundColor: AppColors.stone50,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.stone50,
         elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: AppColors.stone200,
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.stone800),
+          icon: const Icon(LucideIcons.arrowLeft, size: 22, color: AppColors.stone800),
           tooltip: widget.t.cancel,
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           title,
           style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
             color: AppColors.stone900,
           ),
-        ),
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, thickness: 1, color: AppColors.stone100),
         ),
       ),
       body: ResultView(
@@ -121,7 +116,6 @@ class _EditSavedCodeScreenState extends State<EditSavedCodeScreen> {
         onCopy: _handleCopy,
         onShare: _handleShare,
         onReset: () => Navigator.of(context).pop(),
-        onViewImage: () {},
       ),
     );
   }

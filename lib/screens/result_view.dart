@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../constants/ips.dart';
 import '../i18n/translations.dart';
 import '../models/invoice_data.dart';
 import '../theme.dart';
+import '../utils/format.dart';
 import '../utils/ips.dart';
 import '../widgets/editable_row.dart';
 import '../widgets/editable_select_row.dart';
 
-/// Ekran rezultata: banner, QR kartica sa kopiranjem/deljenjem,
-/// editabilna polja sa validacijom, dugme "Skeniraj sledeći" (payInvoice)
-/// ili "Sačuvaj"/"Ažuriraj"/"Obriši" (ownCode).
+/// Ekran rezultata: QR kartica sa iznosom i deljenjem/kopiranjem,
+/// editabilna polja sa validacijom i oznakom izvora podataka, donji bar
+/// "Sačuvaj račun"/"Novi račun" (payInvoice) ili "Sačuvaj"/"Ažuriraj"/"Obriši"
+/// (ownCode).
 class ResultView extends StatelessWidget {
   const ResultView({
     super.key,
@@ -23,13 +26,11 @@ class ResultView extends StatelessWidget {
     required this.onCopy,
     required this.onShare,
     required this.onReset,
-    required this.onViewImage,
     required this.mode,
     this.isEditingExisting = false,
     this.onSave,
     this.onDelete,
     this.onSaveScanned,
-    this.image,
     this.extractionSource,
     this.codeTitle,
     this.onTitleChanged,
@@ -38,7 +39,6 @@ class ResultView extends StatelessWidget {
   final Translations t;
   final InvoiceData data;
   final bool copied;
-  final Uint8List? image;
   final ExtractionSource? extractionSource;
   final String? codeTitle;
   final ValueChanged<String>? onTitleChanged;
@@ -46,7 +46,6 @@ class ResultView extends StatelessWidget {
   final ValueChanged<String> onCopy;
   final VoidCallback onShare;
   final VoidCallback onReset;
-  final VoidCallback onViewImage;
   final ResultMode mode;
   final bool isEditingExisting;
   // Suvišni u payInvoice modu, pa ostaju nullable za razliku od ostatka fajla.
@@ -84,96 +83,27 @@ class ResultView extends StatelessWidget {
         !hasPipe;
 
     final ipsString = generateIpsString(data, allowOpenAmount: isOwnCode);
-    final bannerTitle = isOwnCode
-        ? t.ownCodeBannerTitle
+    // Kratka oznaka izvora podataka pored naslova "Podaci za plaćanje".
+    final sourceLabel = isOwnCode
+        ? null
         : switch (extractionSource) {
-            ExtractionSource.qr => t.extractedQr,
-            ExtractionSource.ocr => t.extractedOcr,
-            _ => t.extracted,
+            ExtractionSource.qr => t.sourceQr,
+            ExtractionSource.ocr => t.sourceOcr,
+            ExtractionSource.text => t.sourceText,
+            ExtractionSource.ai => t.sourceAi,
+            null => null,
           };
 
     return Column(
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
             children: [
-              // 1. Banner uspeha
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-                decoration: BoxDecoration(
-                  color: AppColors.emerald50,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isOwnCode || extractionSource == ExtractionSource.qr
-                          ? Icons.qr_code_2
-                          : Icons.check_circle_outline,
-                      size: 22,
-                      color: AppColors.emerald700,
-                    ),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Text(
-                        bannerTitle,
-                        style: const TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.emerald700,
-                        ),
-                      ),
-                    ),
-                    if (image != null)
-                      GestureDetector(
-                        onTap: onViewImage,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 11, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: AppColors.emerald600,
-                            borderRadius: BorderRadius.circular(11),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.open_in_new,
-                                  size: 13, color: Colors.white),
-                              const SizedBox(width: 5),
-                              Text(
-                                t.viewInvoice,
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
               // 2. QR kartica
               Container(
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.stone100),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x40000000),
-                      blurRadius: 24,
-                      offset: Offset(0, 8),
-                      spreadRadius: -16,
-                    ),
-                  ],
-                ),
+                padding: const EdgeInsets.all(20),
+                decoration: _cardDecoration(24),
                 child: Column(
                   children: [
                     Opacity(
@@ -183,9 +113,9 @@ class ResultView extends StatelessWidget {
                         child: Column(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppColors.stone50,
+                                color: Colors.white,
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(color: AppColors.stone100),
                               ),
@@ -206,41 +136,64 @@ class ResultView extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 18),
+                            const SizedBox(height: 14),
+                            if (data.amount > 0)
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text.rich(
+                                  TextSpan(
+                                    text: formatAmount(data.amount),
+                                    children: const [
+                                      TextSpan(
+                                        text: ' RSD',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0,
+                                          color: AppColors.stone500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.8,
+                                    color: AppColors.stone900,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isOwnCode ? t.ownCodeInstruction : t.scanInstruction,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: AppColors.stone500,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
                             Row(
                               children: [
                                 Expanded(
                                   child: _QrActionButton(
+                                    onTap: onShare,
+                                    icon: LucideIcons.share2,
+                                    label: t.share,
+                                    primary: true,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _QrActionButton(
                                     onTap: () => onCopy(ipsString),
                                     icon: copied
-                                        ? Icons.check_circle_outline
-                                        : Icons.copy,
-                                    iconColor: copied
-                                        ? AppColors.emerald500
-                                        : AppColors.stone600,
+                                        ? LucideIcons.circleCheck
+                                        : LucideIcons.copy,
                                     label: t.copyIps,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _QrActionButton(
-                                    onTap: onShare,
-                                    icon: Icons.share_outlined,
-                                    iconColor: AppColors.stone600,
-                                    label: t.share,
-                                  ),
-                                ),
-                                if (onSaveScanned != null) ...[
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: _QrActionButton(
-                                      onTap: onSaveScanned!,
-                                      icon: Icons.bookmark_add_outlined,
-                                      iconColor: AppColors.stone600,
-                                      label: t.save,
-                                    ),
-                                  ),
-                                ],
                               ],
                             ),
                           ],
@@ -270,23 +223,46 @@ class ResultView extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
               // 3. Kartica sa poljima
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppColors.stone100),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x38000000),
-                      blurRadius: 24,
-                      offset: Offset(0, 8),
-                      spreadRadius: -18,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        t.paymentDetails,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.stone900,
+                        ),
+                      ),
                     ),
+                    if (sourceLabel != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.emerald50,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          sourceLabel,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.emerald700,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
+              ),
+              Container(
+                decoration: _cardDecoration(20),
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
@@ -336,7 +312,7 @@ class ResultView extends StatelessWidget {
                     ),
                     if (isOwnCode)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 11),
+                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 11),
                         child: Text(
                           t.openAmountHint,
                           style: const TextStyle(
@@ -381,123 +357,134 @@ class ResultView extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // 4. Instrukcija
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  isOwnCode ? t.ownCodeInstruction : t.scanInstruction,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    height: 1.6,
-                    color: AppColors.stone400,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
 
-        // Donji bar sa akcijom, uvek vidljiv
-        Container(
-          padding: EdgeInsets.fromLTRB(18, 12, 18, 16 + bottomInset),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [AppColors.stone50, Color(0x00FAFAF9)],
-            ),
-          ),
-          child: !isOwnCode
-              ? SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: FilledButton(
-                    onPressed: onReset,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.stone900,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    child: Text(t.scanAnother),
-                  ),
-                )
-              : isEditingExisting
-                  ? SizedBox(
-                      height: 54,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: onDelete,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.red600,
-                                side:
-                                    const BorderSide(color: AppColors.red400),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              child: Text(t.delete),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: isFormValid ? onSave : null,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.stone900,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              child: Text(t.update),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: FilledButton(
-                        onPressed: isFormValid ? onSave : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.stone900,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          textStyle: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+        // Donji bar sa akcijama, uvek vidljiv
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + bottomInset),
+          child: SizedBox(
+            height: 50,
+            child: Row(
+              children: !isOwnCode
+                  ? [
+                      if (onSaveScanned != null) ...[
+                        Expanded(
+                          child: _BottomButton(
+                            onTap: isFormValid ? onSaveScanned : null,
+                            icon: LucideIcons.bookmark,
+                            label: t.saveInvoice,
+                            style: _BottomStyle.outline,
                           ),
                         ),
-                        child: Text(t.save),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: _BottomButton(
+                          onTap: onReset,
+                          icon: LucideIcons.rotateCcw,
+                          label: t.newInvoice,
+                          style: _BottomStyle.soft,
+                        ),
                       ),
-                    ),
+                    ]
+                  : [
+                      if (isEditingExisting) ...[
+                        Expanded(
+                          child: _BottomButton(
+                            onTap: onDelete,
+                            icon: LucideIcons.trash2,
+                            label: t.delete,
+                            style: _BottomStyle.danger,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: _BottomButton(
+                          onTap: isFormValid ? onSave : null,
+                          icon: LucideIcons.check,
+                          label: isEditingExisting ? t.update : t.save,
+                          style: _BottomStyle.primary,
+                        ),
+                      ),
+                    ],
+            ),
+          ),
         ),
       ],
     );
   }
 }
+
+enum _BottomStyle { outline, soft, primary, danger }
+
+/// Dugme u donjem baru ekrana rezultata.
+class _BottomButton extends StatelessWidget {
+  const _BottomButton({
+    required this.onTap,
+    required this.icon,
+    required this.label,
+    required this.style,
+  });
+
+  final VoidCallback? onTap;
+  final IconData icon;
+  final String label;
+  final _BottomStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, fg, border) = switch (style) {
+      _BottomStyle.outline => (Colors.white, AppColors.stone700, AppColors.stone200),
+      _BottomStyle.soft => (AppColors.stone100, AppColors.stone800, AppColors.stone100),
+      _BottomStyle.primary => (AppColors.emerald600, Colors.white, AppColors.emerald600),
+      _BottomStyle.danger => (Colors.white, AppColors.red600, AppColors.red400),
+    };
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        disabledBackgroundColor: bg.withValues(alpha: 0.5),
+        side: BorderSide(color: border),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Bela kartica sa tankom ivicom i jedva vidljivom senkom.
+BoxDecoration _cardDecoration(double radius) => BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: AppColors.stone200),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x0A1C1917),
+          blurRadius: 2,
+          offset: Offset(0, 1),
+        ),
+      ],
+    );
 
 class _RowDivider extends StatelessWidget {
   const _RowDivider();
@@ -505,7 +492,7 @@ class _RowDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.only(left: 16),
+      padding: EdgeInsets.only(left: 14),
       child: Divider(height: 1, thickness: 1, color: AppColors.stone100),
     );
   }
@@ -545,19 +532,18 @@ class _AmountRowState extends State<_AmountRow> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              widget.label.toUpperCase(),
+              widget.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.05,
-                color: widget.error ? AppColors.red400 : AppColors.stone400,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: widget.error ? AppColors.red600 : AppColors.stone500,
               ),
             ),
           ),
@@ -617,51 +603,58 @@ class _QrActionButton extends StatelessWidget {
   const _QrActionButton({
     required this.onTap,
     required this.icon,
-    required this.iconColor,
     required this.label,
+    this.primary = false,
   });
 
   final VoidCallback onTap;
   final IconData icon;
-  final Color iconColor;
   final String label;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          backgroundColor: AppColors.stone50,
-          foregroundColor: AppColors.stone600,
-          side: const BorderSide(color: AppColors.stone100),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+    final content = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 17),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: iconColor),
-            const SizedBox(width: 7),
-            Flexible(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.48,
-                  ),
-                ),
+      ],
+    );
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    return SizedBox(
+      height: 46,
+      child: primary
+          ? FilledButton(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.emerald600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                shape: shape,
+                elevation: 0,
               ),
+              child: content,
+            )
+          : OutlinedButton(
+              onPressed: onTap,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.stone700,
+                side: const BorderSide(color: AppColors.stone200),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                shape: shape,
+              ),
+              child: content,
             ),
-          ],
-        ),
-      ),
     );
   }
 }

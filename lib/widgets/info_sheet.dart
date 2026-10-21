@@ -123,7 +123,8 @@ Future<void> showInfoSheet(BuildContext context, Translations t) {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                    textStyle: const TextStyle(
+                  fontFamily: kFontFamily,fontWeight: FontWeight.w700),
                   ),
                   child: Text(t.close),
                 ),

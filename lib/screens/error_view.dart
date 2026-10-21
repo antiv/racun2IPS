@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../i18n/translations.dart';
 import '../theme.dart';
@@ -33,7 +34,7 @@ class ErrorView extends StatelessWidget {
                 color: AppColors.red50,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.error_outline, size: 40, color: AppColors.red500),
+              child: const Icon(LucideIcons.circleAlert, size: 40, color: AppColors.red500),
             ),
             const SizedBox(height: 22),
             Text(
@@ -61,7 +62,8 @@ class ErrorView extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                  textStyle: const TextStyle(
+                  fontFamily: kFontFamily,fontWeight: FontWeight.w600),
                 ),
                 child: Text(t.tryAgain),
               ),

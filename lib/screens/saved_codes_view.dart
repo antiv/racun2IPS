@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../i18n/translations.dart';
 import '../models/invoice_data.dart';
 import '../models/saved_code.dart';
 import '../theme.dart';
+import '../utils/format.dart';
 import '../widgets/quick_qr_sheet.dart';
+import '../widgets/saved_code_tile.dart';
 import 'edit_saved_code_screen.dart';
 
 enum _SavedFilter { all, bills, own }
@@ -116,6 +119,20 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
     return confirmed ?? false;
   }
 
+  // widget.codes je snimak liste iz roditelja u trenutku otvaranja ekrana, pa
+  // se promena primenjuje i na lokalni objekat da bi se odmah videla.
+  void _togglePin(SavedCode code) {
+    code.isPinned = !code.isPinned;
+    widget.onTogglePin(code.id);
+    setState(() {});
+  }
+
+  void _togglePaid(SavedCode code) {
+    code.lastPaidAt = code.isPaidThisMonth ? null : DateTime.now();
+    widget.onTogglePaid(code.id);
+    setState(() {});
+  }
+
   void _showQuickSheet(SavedCode code) {
     showModalBottomSheet(
       context: context,
@@ -126,15 +143,10 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
         code: code,
         onCopy: widget.onCopy,
         onShare: () => widget.onShare(code),
-        onTogglePin: () {
-          widget.onTogglePin(code.id);
-          setState(() {});
-        },
-        onTogglePaid: () {
-          widget.onTogglePaid(code.id);
-          setState(() {});
-        },
+        onTogglePin: () => _togglePin(code),
+        onTogglePaid: () => _togglePaid(code),
         onAmountUpdated: (newAmt) {
+          code.data.amount = newAmt;
           widget.onAmountUpdated(code.id, newAmt);
           setState(() {});
         },
@@ -185,7 +197,7 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.emerald600),
+              leading: const Icon(LucideIcons.camera, size: 22, color: AppColors.emerald600),
               title: Text(t.addViaCamera),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
@@ -194,7 +206,7 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.emerald600),
+              leading: const Icon(LucideIcons.image, size: 22, color: AppColors.emerald600),
               title: Text(t.addViaGallery),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
@@ -203,7 +215,7 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.edit_outlined, color: AppColors.emerald600),
+              leading: const Icon(LucideIcons.penLine, size: 22, color: AppColors.emerald600),
               title: Text(t.addViaManual),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
@@ -239,83 +251,83 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
   Widget build(BuildContext context) {
     final t = widget.t;
     final filtered = _filteredAndSorted;
+    final pinned = filtered.where((c) => c.isPinned).toList();
+    final others = filtered.where((c) => !c.isPinned).toList();
+    // Naslovi grupa samo kad postoje obe grupe — inače su suvišni.
+    final showGroups = pinned.isNotEmpty && others.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.stone50,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.stone50,
         elevation: 0,
-        scrolledUnderElevation: 1,
-        shadowColor: AppColors.stone200,
+        scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.stone800),
-          tooltip: t.cancel,
+          icon: const Icon(LucideIcons.arrowLeft, size: 22, color: AppColors.stone800),
+          tooltip: t.back,
           onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            t.savedCodesTitle,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
-              color: AppColors.stone900,
-            ),
-          ),
         ),
         actions: [
           IconButton(
             onPressed: widget.onExport,
             tooltip: t.exportCodes,
-            icon: const Icon(Icons.ios_share, size: 21, color: AppColors.stone700),
+            icon: const Icon(LucideIcons.upload, size: 20, color: AppColors.stone600),
           ),
           IconButton(
             onPressed: widget.onImport,
             tooltip: t.importCodes,
-            icon: const Icon(Icons.file_download_outlined,
-                size: 22, color: AppColors.stone700),
+            icon: const Icon(LucideIcons.download, size: 20, color: AppColors.stone600),
           ),
           const SizedBox(width: 4),
         ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, thickness: 1, color: AppColors.stone100),
-        ),
       ),
       body: SafeArea(
         top: false,
         bottom: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Gornji kontrolni deo: pretraga i filteri
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            // Gornji kontrolni deo: naslov, pretraga i filteri
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Text(
+                    t.savedCodesTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.7,
+                      color: AppColors.stone900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   // Pretraga
                   Container(
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: AppColors.stone50,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.stone200),
                     ),
+                    alignment: Alignment.center,
                     child: TextField(
                       controller: _searchController,
                       onChanged: (val) => setState(() => _query = val),
+                      textAlignVertical: TextAlignVertical.center,
                       decoration: InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                        prefixIcon: const Icon(Icons.search,
-                            size: 19, color: AppColors.stone400),
+                        contentPadding: EdgeInsets.zero,
+                        prefixIcon: const Icon(LucideIcons.search,
+                            size: 18, color: AppColors.stone500),
                         suffixIcon: _query.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear,
+                                icon: const Icon(LucideIcons.x,
                                     size: 18, color: AppColors.stone400),
                                 onPressed: () {
                                   _searchController.clear();
@@ -325,44 +337,41 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
                             : null,
                         hintText: t.searchHint,
                         hintStyle: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 14,
                           color: AppColors.stone400,
                         ),
                       ),
                       style: const TextStyle(fontSize: 14, color: AppColors.stone800),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  // Filter tabovi (horizontalno skrolabilni za sprečavanje overflow-a)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
+                  const SizedBox(height: 14),
+                  // Filter kao segmentirana kontrola
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppColors.stone100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Row(
                       children: [
-                        _FilterPill(
-                          label: t.filterAll,
-                          isSelected: _filter == _SavedFilter.all,
-                          onTap: () => setState(() => _filter = _SavedFilter.all),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterPill(
-                          label: t.filterBills,
-                          isSelected: _filter == _SavedFilter.bills,
-                          onTap: () => setState(() => _filter = _SavedFilter.bills),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterPill(
-                          label: t.filterOwn,
-                          isSelected: _filter == _SavedFilter.own,
-                          onTap: () => setState(() => _filter = _SavedFilter.own),
-                        ),
+                        for (final (filter, label) in [
+                          (_SavedFilter.all, t.filterAll),
+                          (_SavedFilter.bills, t.filterBills),
+                          (_SavedFilter.own, t.filterOwn),
+                        ])
+                          Expanded(
+                            child: _FilterSegment(
+                              label: label,
+                              isSelected: _filter == filter,
+                              onTap: () => setState(() => _filter = filter),
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, thickness: 1, color: AppColors.stone100),
 
             // Lista sačuvanih kodova
             Expanded(
@@ -373,57 +382,53 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
                     )
                   : filtered.isEmpty
                       ? _EmptyState(title: t.noSearchResults, desc: null)
-                      : ListView.separated(
+                      : ListView(
                           physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 10),
-                          itemBuilder: (context, i) {
-                            final code = filtered[i];
-                            return _SavedCodeRow(
-                              t: t,
-                              code: code,
-                              onTap: () => _showQuickSheet(code),
-                              onTogglePin: () {
-                                widget.onTogglePin(code.id);
-                                setState(() {});
-                              },
-                              onDismissed: () => widget.onDelete(code.id),
-                              confirmDismiss: () => _confirmDelete(context),
-                            );
-                          },
+                          // Donji prostor da FAB ne prekrije poslednji red.
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                          children: [
+                            if (showGroups) _GroupLabel(t.pinnedSection),
+                            for (final code in pinned)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _PinnedCard(
+                                  t: t,
+                                  code: code,
+                                  onShowQr: () => _showQuickSheet(code),
+                                  onTogglePaid: () => _togglePaid(code),
+                                  onDismissed: () => widget.onDelete(code.id),
+                                  confirmDismiss: () => _confirmDelete(context),
+                                ),
+                              ),
+                            if (showGroups) _GroupLabel(t.otherSection),
+                            if (others.isNotEmpty)
+                              _GroupedCard(
+                                t: t,
+                                codes: others,
+                                onTap: _showQuickSheet,
+                                onDismissed: (code) => widget.onDelete(code.id),
+                                confirmDismiss: () => _confirmDelete(context),
+                              ),
+                          ],
                         ),
             ),
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: AppColors.stone100)),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton.icon(
-              onPressed: _showAddCodeDialog,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.emerald600,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w600,
-                ),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.add, size: 20),
-              label: Text(t.addNew),
-            ),
+      floatingActionButton: SizedBox(
+        height: 56,
+        child: FloatingActionButton.extended(
+          onPressed: _showAddCodeDialog,
+          backgroundColor: AppColors.emerald600,
+          foregroundColor: Colors.white,
+          elevation: 3,
+          highlightElevation: 5,
+          extendedPadding: const EdgeInsets.only(left: 18, right: 22),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          icon: const Icon(LucideIcons.plus, size: 20),
+          label: Text(
+            t.add,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
         ),
       ),
@@ -434,8 +439,8 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
 /// Alias za unazadnu kompatibilnost.
 typedef SavedCodesView = SavedCodesScreen;
 
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
+class _FilterSegment extends StatelessWidget {
+  const _FilterSegment({
     required this.label,
     required this.isSelected,
     required this.onTap,
@@ -447,22 +452,61 @@ class _FilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.stone900 : AppColors.stone100,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppColors.stone600,
+    return Semantics(
+      selected: isSelected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 36,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: isSelected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 2,
+                      offset: Offset(0, 1),
+                    ),
+                  ]
+                : null,
           ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? AppColors.stone900 : AppColors.stone500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+          color: AppColors.stone500,
         ),
       ),
     );
@@ -483,7 +527,15 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.qr_code_2, size: 44, color: AppColors.stone300),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.stone100,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(LucideIcons.qrCode, size: 30, color: AppColors.stone400),
+            ),
             const SizedBox(height: 14),
             Text(
               title,
@@ -491,7 +543,7 @@ class _EmptyState extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 15.5,
                 fontWeight: FontWeight.w600,
-                color: AppColors.stone600,
+                color: AppColors.stone700,
               ),
             ),
             if (desc != null) ...[
@@ -499,7 +551,7 @@ class _EmptyState extends StatelessWidget {
               Text(
                 desc!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, color: AppColors.stone400),
+                style: const TextStyle(fontSize: 13, color: AppColors.stone500),
               ),
             ],
           ],
@@ -509,172 +561,247 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _SavedCodeRow extends StatelessWidget {
-  const _SavedCodeRow({
+/// Crvena pozadina za brisanje prevlačenjem.
+Widget _dismissBackground(double radius) => Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 20),
+      decoration: BoxDecoration(
+        color: AppColors.red50,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: const Icon(LucideIcons.trash2, size: 20, color: AppColors.red600),
+    );
+
+/// Prikačen kod: istaknuta kartica sa iznosom i brzim akcijama.
+class _PinnedCard extends StatelessWidget {
+  const _PinnedCard({
     required this.t,
     required this.code,
-    required this.onTap,
-    required this.onTogglePin,
+    required this.onShowQr,
+    required this.onTogglePaid,
     required this.onDismissed,
     required this.confirmDismiss,
   });
 
   final Translations t;
   final SavedCode code;
-  final VoidCallback onTap;
-  final VoidCallback onTogglePin;
+  final VoidCallback onShowQr;
+  final VoidCallback onTogglePaid;
   final VoidCallback onDismissed;
   final Future<bool> Function() confirmDismiss;
 
-  String get _maskedAccount {
-    final acc = code.data.accountNumber;
-    if (acc.length < 4) return acc;
-    return '•••• ${acc.substring(acc.length - 4)}';
-  }
-
-  String get _amountLabel {
-    final amount = code.data.amount;
-    if (amount <= 0) return t.openAmountLabel;
-    final formatted = amount == amount.roundToDouble()
-        ? amount.toStringAsFixed(0)
-        : amount.toStringAsFixed(2);
-    return '$formatted RSD';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final hasTitle = code.title.isNotEmpty;
-    final displayTitle = hasTitle ? code.title : code.data.recipientName;
-    final displaySubtitle = hasTitle
-        ? (code.data.recipientName.isNotEmpty
-            ? '${code.data.recipientName} • $_maskedAccount'
-            : _maskedAccount)
-        : (code.data.purpose.isNotEmpty ? code.data.purpose : _maskedAccount);
-
+    final amount = code.data.amount;
+    final isTemplate = code.kind == SavedCodeKind.billTemplate;
     final isPaid = code.isPaidThisMonth;
-
     return Dismissible(
       key: ValueKey(code.id),
       direction: DismissDirection.endToStart,
       confirmDismiss: (_) => confirmDismiss(),
       onDismissed: (_) => onDismissed(),
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+      background: _dismissBackground(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.red50,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.stone200),
         ),
-        child: const Icon(Icons.delete_outline, color: AppColors.red600),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: code.isPinned ? AppColors.emerald200 : AppColors.stone100,
-              width: code.isPinned ? 1.5 : 1.0,
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x06000000),
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              if (code.isPinned) ...[
-                const Icon(Icons.push_pin, size: 16, color: AppColors.emerald600),
-                const SizedBox(width: 8),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+        child: Column(
+          children: [
+            SavedCodeTile(
+              t: t,
+              code: code,
+              subtitle: code.data.recipientName.isNotEmpty
+                  ? code.data.recipientName
+                  : SavedCodeTile.maskedAccount(code),
+              padding: EdgeInsets.zero,
+              trailing: amount > 0
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Flexible(
-                          child: Text(
-                            displayTitle.isEmpty ? _maskedAccount : displayTitle,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.stone800,
-                            ),
+                        Text(
+                          formatAmount(amount),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.stone900,
                           ),
                         ),
-                        if (isPaid) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.emerald50,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.check,
-                                    size: 11, color: AppColors.emerald700),
-                                const SizedBox(width: 2),
-                                Text(
-                                  t.paidBadge,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.emerald700,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        const Text(
+                          'RSD',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.stone500,
                           ),
-                        ],
+                        ),
                       ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      displaySubtitle,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.stone400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: code.data.amount <= 0
-                      ? AppColors.amber50
-                      : AppColors.emerald50,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  _amountLabel,
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
-                    color: code.data.amount <= 0
-                        ? AppColors.amber700
-                        : AppColors.emerald700,
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _CardButton(
+                    onTap: onShowQr,
+                    icon: LucideIcons.qrCode,
+                    label: t.showQr,
+                    primary: true,
                   ),
                 ),
-              ),
-            ],
-          ),
+                if (isTemplate) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _CardButton(
+                      onTap: onTogglePaid,
+                      icon: isPaid ? LucideIcons.circleCheck : LucideIcons.check,
+                      label: isPaid ? t.paidBadge : t.markPaidShort,
+                      highlighted: isPaid,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+class _CardButton extends StatelessWidget {
+  const _CardButton({
+    required this.onTap,
+    required this.icon,
+    required this.label,
+    this.primary = false,
+    this.highlighted = false,
+  });
+
+  final VoidCallback onTap;
+  final IconData icon;
+  final String label;
+  final bool primary;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 16),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    return SizedBox(
+      height: 40,
+      child: primary
+          ? FilledButton(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.emerald600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                shape: shape,
+                elevation: 0,
+              ),
+              child: child,
+            )
+          : OutlinedButton(
+              onPressed: onTap,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: highlighted ? AppColors.emerald50 : Colors.white,
+                foregroundColor:
+                    highlighted ? AppColors.emerald700 : AppColors.stone700,
+                side: BorderSide(
+                  color: highlighted ? AppColors.emerald200 : AppColors.stone200,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                shape: shape,
+              ),
+              child: child,
+            ),
+    );
+  }
+}
+
+/// Ostali kodovi: jedna kartica sa redovima odvojenim linijom.
+class _GroupedCard extends StatelessWidget {
+  const _GroupedCard({
+    required this.t,
+    required this.codes,
+    required this.onTap,
+    required this.onDismissed,
+    required this.confirmDismiss,
+  });
+
+  final Translations t;
+  final List<SavedCode> codes;
+  final ValueChanged<SavedCode> onTap;
+  final ValueChanged<SavedCode> onDismissed;
+  final Future<bool> Function() confirmDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.stone200),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < codes.length; i++) ...[
+            if (i > 0)
+              const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+            Dismissible(
+              key: ValueKey(codes[i].id),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (_) => confirmDismiss(),
+              onDismissed: (_) => onDismissed(codes[i]),
+              background: _dismissBackground(0),
+              child: Material(
+                color: Colors.white,
+                child: InkWell(
+                  onTap: () => onTap(codes[i]),
+                  child: SavedCodeTile(
+                    t: t,
+                    code: codes[i],
+                    subtitle: _subtitle(codes[i]),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    trailing: const Icon(
+                      LucideIcons.chevronRight,
+                      size: 18,
+                      color: AppColors.stone400,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _subtitle(SavedCode code) {
+    final recipient = code.title.isNotEmpty && code.data.recipientName.isNotEmpty
+        ? code.data.recipientName
+        : SavedCodeTile.maskedAccount(code);
+    return '$recipient · ${SavedCodeTile.amountLabel(code, t)}';
+  }
+}
+
