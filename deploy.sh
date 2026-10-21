@@ -35,17 +35,13 @@ BUMP=true
 UPLOAD=false
 for arg in "$@"; do
   case "$arg" in
-    apk)        FORMAT="apk" ;;
-    aab)        FORMAT="aab" ;;
-    --no-bump)  BUMP=false ;;
     apk)          FORMAT="apk" ;;
     aab)          FORMAT="aab" ;;
     --upload)     UPLOAD=true ;;
     --no-upload)  UPLOAD=false ;;
     --no-bump)    BUMP=false ;;
     -h|--help)
-      sed -n '10,16p' "$0" | sed 's/^#[[:space:]]\{0,1\}//'
-      sed -n '10,15p' "$0" | sed 's/^#[[:space:]]\{0,1\}//'
+      sed -n '10,19p' "$0" | sed 's/^#[[:space:]]\{0,1\}//'
       exit 0 ;;
     *)
       echo "Nepoznat argument: $arg" >&2

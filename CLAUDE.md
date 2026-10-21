@@ -15,7 +15,6 @@ that convention when editing existing files.
 
 ## Commands
 
-Flutter version is pinned via FVM (`.fvmrc` → 3.44.4) — always prefix commands
 Flutter version is pinned via FVM (`.fvmrc` → 3.47.5) — always prefix commands
 with `fvm`, not bare `flutter`.
 
@@ -34,10 +33,6 @@ and building the app (extraction calls fail without it).
 ### Deploy
 
 ```sh
-./deploy.sh              # Android AAB for Play Store, bumps patch+build version
-./deploy.sh apk           # APK instead of AAB
-./deploy.sh --no-bump     # skip version bump
-./deploy_ios.sh           # iOS build + upload to App Store Connect
 ./deploy.sh                   # Android AAB za Play Store, bump patch+build verzije
 ./deploy.sh --upload          # Android AAB + automatski upload na Google Play (internal track)
 ./deploy.sh apk               # APK umesto AAB
@@ -50,7 +45,6 @@ and building the app (extraction calls fail without it).
 Both scripts read version from `pubspec.yaml` (`X.Y.Z+N`) and bump patch+build
 by default. Android release signing needs `android/key.properties` (not in
 git) pointing at `release-key.jks` in repo root; without it the release build
-is signed with the debug key. iOS deploy needs `ios/deploy.env` (not in git,
 is signed with the debug key. Android upload na Google Play koristi `tool/play_upload.py`
 i zahteva `android/deploy.env` (šablon u `android/deploy.env.example`) sa
 `PLAY_SERVICE_ACCOUNT_JSON` i `PLAY_TRACK`. iOS deploy needs `ios/deploy.env` (not in git,

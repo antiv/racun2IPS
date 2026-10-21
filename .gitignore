@@ -33,6 +33,16 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Build paketi
+*.aab
+*.apk
+*.ipa
+/android/build/
+
+# Lokalni AI alati i indeksi
+.codegraph/
+.claude/
+
 # Symbolication related
 app.*.symbols
 
