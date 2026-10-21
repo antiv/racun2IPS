@@ -547,23 +547,28 @@ class _AmountRowState extends State<_AmountRow> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            widget.label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.05,
-              color: widget.error ? AppColors.red400 : AppColors.stone400,
+          Expanded(
+            child: Text(
+              widget.label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.05,
+                color: widget.error ? AppColors.red400 : AppColors.stone400,
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Row(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               SizedBox(
-                width: 120,
+                width: 110,
                 child: TextField(
                   controller: _controller,
                   textAlign: TextAlign.right,

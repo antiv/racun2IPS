@@ -69,11 +69,14 @@ class _ProcessingViewState extends State<ProcessingView>
   Widget build(BuildContext context) {
     final steps = widget.t.processingSteps;
     final step = steps[_stepIndex % steps.length];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 26),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+    return Center(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
           SizedBox(
             width: 132,
             height: 132,
@@ -253,8 +256,9 @@ class _ProcessingViewState extends State<ProcessingView>
           ],
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 /// Prsten: svetli krug sa emerald lukom na vrhu (kao border-t spinner).

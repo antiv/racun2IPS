@@ -7,10 +7,10 @@ import '../widgets/quick_qr_sheet.dart';
 
 enum _SavedFilter { all, bills, own }
 
-/// Lista sačuvanih IPS kodova i šablona računa, sa pretragom, filterima,
-/// pinovanjem, statusom plaćanja i brzim prikazom QR koda.
-class SavedCodesView extends StatefulWidget {
-  const SavedCodesView({
+/// Zasebna strana za pregled, filtriranje, pretragu i upravljanje sačuvanim
+/// računima (šablonima) i sopstvenim IPS kodovima.
+class SavedCodesScreen extends StatefulWidget {
+  const SavedCodesScreen({
     super.key,
     required this.t,
     required this.codes,
@@ -40,10 +40,10 @@ class SavedCodesView extends StatefulWidget {
   final VoidCallback onImport;
 
   @override
-  State<SavedCodesView> createState() => _SavedCodesViewState();
+  State<SavedCodesScreen> createState() => _SavedCodesScreenState();
 }
 
-class _SavedCodesViewState extends State<SavedCodesView> {
+class _SavedCodesScreenState extends State<SavedCodesScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   _SavedFilter _filter = _SavedFilter.all;
@@ -120,10 +120,22 @@ class _SavedCodesViewState extends State<SavedCodesView> {
         code: code,
         onCopy: widget.onCopy,
         onShare: () => widget.onShare(code),
-        onTogglePin: () => widget.onTogglePin(code.id),
-        onTogglePaid: () => widget.onTogglePaid(code.id),
-        onAmountUpdated: (newAmt) => widget.onAmountUpdated(code.id, newAmt),
-        onEditDetails: () => widget.onOpen(code),
+        onTogglePin: () {
+          widget.onTogglePin(code.id);
+          setState(() {});
+        },
+        onTogglePaid: () {
+          widget.onTogglePaid(code.id);
+          setState(() {});
+        },
+        onAmountUpdated: (newAmt) {
+          widget.onAmountUpdated(code.id, newAmt);
+          setState(() {});
+        },
+        onEditDetails: () {
+          Navigator.of(ctx).pop();
+          widget.onOpen(code);
+        },
       ),
     );
   }
@@ -131,153 +143,201 @@ class _SavedCodesViewState extends State<SavedCodesView> {
   @override
   Widget build(BuildContext context) {
     final t = widget.t;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
     final filtered = _filteredAndSorted;
 
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-            children: [
-              // Naslov i dugmad za uvoz/izvoz
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      t.savedCodesTitle,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.4,
-                        color: AppColors.stone800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: widget.onExport,
-                    tooltip: t.exportCodes,
-                    icon: const Icon(Icons.ios_share,
-                        size: 20, color: AppColors.stone400),
-                  ),
-                  IconButton(
-                    onPressed: widget.onImport,
-                    tooltip: t.importCodes,
-                    icon: const Icon(Icons.file_download_outlined,
-                        size: 20, color: AppColors.stone400),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Filter tabovi (Svi / Računi za plaćanje / Moji kodovi)
-              Row(
-                children: [
-                  _FilterPill(
-                    label: t.filterAll,
-                    isSelected: _filter == _SavedFilter.all,
-                    onTap: () => setState(() => _filter = _SavedFilter.all),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    label: t.filterBills,
-                    isSelected: _filter == _SavedFilter.bills,
-                    onTap: () => setState(() => _filter = _SavedFilter.bills),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    label: t.filterOwn,
-                    isSelected: _filter == _SavedFilter.own,
-                    onTap: () => setState(() => _filter = _SavedFilter.own),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Pretraga
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.stone100),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (val) => setState(() => _query = val),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                    prefixIcon: const Icon(Icons.search,
-                        size: 20, color: AppColors.stone400),
-                    hintText: t.searchHint,
-                    hintStyle: const TextStyle(
-                      fontSize: 13.5,
-                      color: AppColors.stone400,
-                    ),
-                  ),
-                  style: const TextStyle(fontSize: 14, color: AppColors.stone800),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              if (widget.codes.isEmpty)
-                _EmptyState(
-                  title: t.noSavedCodesTitle,
-                  desc: t.noSavedCodesDesc,
-                )
-              else if (filtered.isEmpty)
-                _EmptyState(title: t.noSearchResults, desc: null)
-              else
-                for (var i = 0; i < filtered.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 10),
-                  _SavedCodeRow(
-                    t: t,
-                    code: filtered[i],
-                    onTap: () => _showQuickSheet(filtered[i]),
-                    onTogglePin: () => widget.onTogglePin(filtered[i].id),
-                    onDismissed: () => widget.onDelete(filtered[i].id),
-                    confirmDismiss: () => _confirmDelete(context),
-                  ),
-                ],
-            ],
+    return Scaffold(
+      backgroundColor: AppColors.stone50,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        shadowColor: AppColors.stone200,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.stone800),
+          tooltip: t.cancel,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            t.savedCodesTitle,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+              color: AppColors.stone900,
+            ),
           ),
         ),
-        Container(
-          padding: EdgeInsets.fromLTRB(18, 12, 18, 16 + bottomInset),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [AppColors.stone50, Color(0x00FAFAF9)],
+        actions: [
+          IconButton(
+            onPressed: widget.onExport,
+            tooltip: t.exportCodes,
+            icon: const Icon(Icons.ios_share, size: 21, color: AppColors.stone700),
+          ),
+          IconButton(
+            onPressed: widget.onImport,
+            tooltip: t.importCodes,
+            icon: const Icon(Icons.file_download_outlined,
+                size: 22, color: AppColors.stone700),
+          ),
+          const SizedBox(width: 4),
+        ],
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, thickness: 1, color: AppColors.stone100),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          children: [
+            // Gornji kontrolni deo: pretraga i filteri
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                children: [
+                  // Pretraga
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.stone50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.stone200),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) => setState(() => _query = val),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                        prefixIcon: const Icon(Icons.search,
+                            size: 19, color: AppColors.stone400),
+                        suffixIcon: _query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear,
+                                    size: 18, color: AppColors.stone400),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _query = '');
+                                },
+                              )
+                            : null,
+                        hintText: t.searchHint,
+                        hintStyle: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.stone400,
+                        ),
+                      ),
+                      style: const TextStyle(fontSize: 14, color: AppColors.stone800),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Filter tabovi (horizontalno skrolabilni za sprečavanje overflow-a)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        _FilterPill(
+                          label: t.filterAll,
+                          isSelected: _filter == _SavedFilter.all,
+                          onTap: () => setState(() => _filter = _SavedFilter.all),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterPill(
+                          label: t.filterBills,
+                          isSelected: _filter == _SavedFilter.bills,
+                          onTap: () => setState(() => _filter = _SavedFilter.bills),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterPill(
+                          label: t.filterOwn,
+                          isSelected: _filter == _SavedFilter.own,
+                          onTap: () => setState(() => _filter = _SavedFilter.own),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+
+            // Lista sačuvanih kodova
+            Expanded(
+              child: widget.codes.isEmpty
+                  ? _EmptyState(
+                      title: t.noSavedCodesTitle,
+                      desc: t.noSavedCodesDesc,
+                    )
+                  : filtered.isEmpty
+                      ? _EmptyState(title: t.noSearchResults, desc: null)
+                      : ListView.separated(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
+                          itemBuilder: (context, i) {
+                            final code = filtered[i];
+                            return _SavedCodeRow(
+                              t: t,
+                              code: code,
+                              onTap: () => _showQuickSheet(code),
+                              onTogglePin: () {
+                                widget.onTogglePin(code.id);
+                                setState(() {});
+                              },
+                              onDismissed: () => widget.onDelete(code.id),
+                              confirmDismiss: () => _confirmDelete(context),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: AppColors.stone100)),
           ),
           child: SizedBox(
             width: double.infinity,
-            height: 54,
+            height: 52,
             child: FilledButton.icon(
               onPressed: widget.onAddPressed,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.emerald600,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 textStyle: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 15.5,
                   fontWeight: FontWeight.w600,
                 ),
+                elevation: 0,
               ),
               icon: const Icon(Icons.add, size: 20),
               label: Text(t.addNew),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
+
+/// Alias za unazadnu kompatibilnost.
+typedef SavedCodesView = SavedCodesScreen;
 
 class _FilterPill extends StatelessWidget {
   const _FilterPill({
@@ -298,11 +358,8 @@ class _FilterPill extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.stone900 : Colors.white,
+          color: isSelected ? AppColors.stone900 : AppColors.stone100,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? AppColors.stone900 : AppColors.stone200,
-          ),
         ),
         child: Text(
           label,
@@ -325,30 +382,33 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Column(
-        children: [
-          const Icon(Icons.qr_code_2, size: 40, color: AppColors.stone300),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.stone500,
-            ),
-          ),
-          if (desc != null) ...[
-            const SizedBox(height: 6),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.qr_code_2, size: 44, color: AppColors.stone300),
+            const SizedBox(height: 14),
             Text(
-              desc!,
+              title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppColors.stone400),
+              style: const TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.stone600,
+              ),
             ),
+            if (desc != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                desc!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: AppColors.stone400),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -424,6 +484,13 @@ class _SavedCodeRow extends StatelessWidget {
               color: code.isPinned ? AppColors.emerald200 : AppColors.stone100,
               width: code.isPinned ? 1.5 : 1.0,
             ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             children: [

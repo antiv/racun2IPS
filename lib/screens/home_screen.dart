@@ -257,11 +257,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _pickPdf() async {
-    final bytes = await backup_utils.pickPdfDocumentBytes();
-    if (bytes == null || !mounted) return;
-    _resultMode = ResultMode.payInvoice;
-    _editingSavedId = null;
-    await _processPdf(bytes);
+    try {
+      final bytes = await backup_utils.pickPdfDocumentBytes();
+      if (bytes == null) {
+        // Korisnik je otkazao izbor - osiguraj da aplikacija ostane u idle stanju
+        if (mounted && _state != AppState.idle) {
+          setState(() => _state = AppState.idle);
+        }
+        return;
+      }
+      if (!mounted) return;
+      _resultMode = ResultMode.payInvoice;
+      _editingSavedId = null;
+      await _processPdf(bytes);
+    } catch (e) {
+      debugPrint('Greška pri izboru PDF-a: $e');
+      if (mounted) {
+        _showToast('Nije moguće otvoriti izabrani PDF');
+      }
+    }
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -466,7 +480,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _editingTitle = '';
       _extractionSource = null;
       _resultMode = ResultMode.payInvoice;
-      _state = wasOwnCode ? AppState.savedList : AppState.idle;
+      _state = AppState.idle;
     });
     if (_reviewPending && fromResult && !wasOwnCode) {
       _reviewPending = false;
@@ -499,8 +513,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() => _savedCodes = codes);
   }
 
-  void _openSavedList() {
-    setState(() => _state = AppState.savedList);
+  void _openSavedList() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => SavedCodesScreen(
+          t: _t,
+          codes: _savedCodes,
+          onOpen: (saved) {
+            Navigator.of(ctx).pop();
+            _openSavedCode(saved);
+          },
+          onDelete: _deleteSavedCode,
+          onTogglePin: (id) async {
+            await _savedCodesService.togglePin(id);
+            await _loadSavedCodes();
+          },
+          onTogglePaid: (id) async {
+            await _savedCodesService.togglePaidThisMonth(id);
+            await _loadSavedCodes();
+          },
+          onAmountUpdated: (id, amt) async {
+            await _savedCodesService.updateAmount(id, amt);
+            await _loadSavedCodes();
+          },
+          onCopy: _handleCopy,
+          onShare: (code) => share_utils.shareQrCode(
+            generateIpsString(
+              code.data,
+              allowOpenAmount: code.kind == SavedCodeKind.ownAccount,
+            ),
+            _t.title,
+            _t.shareDesc,
+          ),
+          onAddPressed: () {
+            Navigator.of(ctx).pop();
+            _showAddOwnCodeSheet();
+          },
+          onExport: _exportSavedCodes,
+          onImport: _importSavedCodes,
+        ),
+      ),
+    );
+    if (mounted) {
+      await _loadSavedCodes();
+    }
   }
 
   void _startInvoiceCamera() {
@@ -886,7 +942,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildHeader(Translations t) {
     final topInset = MediaQuery.of(context).padding.top;
     return Container(
-      padding: EdgeInsets.fromLTRB(18, topInset + 12, 18, 13),
+      padding: EdgeInsets.fromLTRB(16, topInset + 10, 16, 11),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.stone100)),
@@ -895,69 +951,77 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           // Levi deo: ikona + naziv
           Container(
-            width: 38,
-            height: 38,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(10),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x4D059669),
-                  blurRadius: 15,
-                  offset: Offset(0, 6),
-                  spreadRadius: -4,
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                  spreadRadius: -3,
                 ),
               ],
             ),
             clipBehavior: Clip.antiAlias,
             child: Image.asset('assets/images/app-icon.png', fit: BoxFit.cover),
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                RichText(
-                  text: const TextSpan(
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.34,
-                      height: 1,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: RichText(
+                    maxLines: 1,
+                    softWrap: false,
+                    text: const TextSpan(
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.34,
+                        height: 1.1,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: 'Invoice',
+                          style: TextStyle(color: AppColors.emerald600),
+                        ),
+                        TextSpan(
+                          text: '2IPS',
+                          style: TextStyle(color: AppColors.stone900),
+                        ),
+                      ],
                     ),
-                    children: [
-                      TextSpan(
-                        text: 'Invoice',
-                        style: TextStyle(color: AppColors.emerald600),
-                      ),
-                      TextSpan(
-                        text: '2IPS',
-                        style: TextStyle(color: AppColors.stone900),
-                      ),
-                    ],
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   t.subtitle.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 9.5,
+                    fontSize: 9,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0.76,
+                    letterSpacing: 0.6,
                     color: AppColors.stone400,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           // Desni deo: info, jezik, sačuvani kodovi/nazad
           _HeaderIconButton(
             icon: Icons.info_outline,
             tooltip: t.infoTitle,
             onTap: () => showInfoSheet(context, t),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.all(2.5),
             decoration: BoxDecoration(
@@ -971,8 +1035,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onTap: () => setState(() => _lang = l),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
+                        horizontal: 8,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
                         color: _lang == l ? Colors.white : Colors.transparent,
@@ -990,9 +1054,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: Text(
                         l.name.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 10.5,
+                          fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          letterSpacing: 0.42,
+                          letterSpacing: 0.4,
                           color: _lang == l
                               ? AppColors.stone800
                               : AppColors.stone400,
@@ -1003,7 +1067,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           _state == AppState.idle
               ? _HeaderIconButton(
                   icon: Icons.qr_code_2,
@@ -1017,7 +1081,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   IconData get _headerSecondaryIcon {
-    if (_state == AppState.savedList) return Icons.close;
     if (_resultMode == ResultMode.ownCode) return Icons.arrow_back;
     return Icons.refresh;
   }
@@ -1083,37 +1146,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           onRetry: _reset,
         );
       case AppState.savedList:
-        return SavedCodesView(
-          key: const ValueKey('savedList'),
-          t: t,
-          codes: _savedCodes,
-          onOpen: _openSavedCode,
-          onDelete: _deleteSavedCode,
-          onTogglePin: (id) async {
-            await _savedCodesService.togglePin(id);
-            await _loadSavedCodes();
-          },
-          onTogglePaid: (id) async {
-            await _savedCodesService.togglePaidThisMonth(id);
-            await _loadSavedCodes();
-          },
-          onAmountUpdated: (id, amt) async {
-            await _savedCodesService.updateAmount(id, amt);
-            await _loadSavedCodes();
-          },
-          onCopy: _handleCopy,
-          onShare: (code) => share_utils.shareQrCode(
-            generateIpsString(
-              code.data,
-              allowOpenAmount: code.kind == SavedCodeKind.ownAccount,
-            ),
-            t.title,
-            t.shareDesc,
-          ),
-          onAddPressed: _showAddOwnCodeSheet,
-          onExport: _exportSavedCodes,
-          onImport: _importSavedCodes,
-        );
+        return const SizedBox.shrink();
     }
   }
 }
