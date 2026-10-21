@@ -519,9 +519,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         builder: (ctx) => SavedCodesScreen(
           t: _t,
           codes: _savedCodes,
-          onOpen: (saved) {
-            Navigator.of(ctx).pop();
-            _openSavedCode(saved);
+          onUpdate: (updated) async {
+            await _savedCodesService.update(
+              updated.id,
+              updated.data,
+              title: updated.title,
+            );
+            await _loadSavedCodes();
+          },
+          onAddCode: (newCode) async {
+            await _savedCodesService.add(newCode);
+            await _loadSavedCodes();
           },
           onDelete: _deleteSavedCode,
           onTogglePin: (id) async {
@@ -545,10 +553,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             _t.title,
             _t.shareDesc,
           ),
-          onAddPressed: () {
-            Navigator.of(ctx).pop();
-            _showAddOwnCodeSheet();
-          },
+          onStartCamera: _startOwnCodeCamera,
+          onStartGallery: () => _startOwnCodeGallery(),
           onExport: _exportSavedCodes,
           onImport: _importSavedCodes,
         ),
@@ -581,30 +587,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _resultMode = ResultMode.ownCode;
     _editingSavedId = null;
     return _pickFromGallery();
-  }
-
-  void _startManualEntry() {
-    setState(() {
-      _resultMode = ResultMode.ownCode;
-      _editingSavedId = null;
-      _editingTitle = '';
-      _image = null;
-      _invoiceData = InvoiceData();
-      _state = AppState.result;
-    });
-  }
-
-  void _openSavedCode(SavedCode saved) {
-    setState(() {
-      _resultMode = saved.kind == SavedCodeKind.ownAccount
-          ? ResultMode.ownCode
-          : ResultMode.payInvoice;
-      _editingSavedId = saved.id;
-      _editingTitle = saved.title;
-      _image = null;
-      _invoiceData = saved.data.copyWith();
-      _state = AppState.result;
-    });
   }
 
   Future<void> _saveCurrentCode() async {
@@ -725,58 +707,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _deleteSavedCode(id);
     if (!mounted) return;
     _reset();
-  }
-
-  void _showAddOwnCodeSheet() {
-    final t = _t;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 38,
-              height: 5,
-              margin: const EdgeInsets.only(top: 10, bottom: 6),
-              decoration: BoxDecoration(
-                color: AppColors.stone200,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: Text(t.addViaCamera),
-              onTap: () {
-                Navigator.of(context).pop();
-                _startOwnCodeCamera();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.file_upload_outlined),
-              title: Text(t.addViaGallery),
-              onTap: () {
-                Navigator.of(context).pop();
-                _startOwnCodeGallery();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_note),
-              title: Text(t.addViaManual),
-              onTap: () {
-                Navigator.of(context).pop();
-                _startManualEntry();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showImagePreview() {

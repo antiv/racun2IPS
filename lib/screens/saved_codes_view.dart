@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../i18n/translations.dart';
+import '../models/invoice_data.dart';
 import '../models/saved_code.dart';
 import '../theme.dart';
 import '../widgets/quick_qr_sheet.dart';
+import 'edit_saved_code_screen.dart';
 
 enum _SavedFilter { all, bills, own }
 
@@ -14,28 +16,32 @@ class SavedCodesScreen extends StatefulWidget {
     super.key,
     required this.t,
     required this.codes,
-    required this.onOpen,
+    required this.onUpdate,
+    required this.onAddCode,
     required this.onDelete,
     required this.onTogglePin,
     required this.onTogglePaid,
     required this.onAmountUpdated,
     required this.onCopy,
     required this.onShare,
-    required this.onAddPressed,
+    required this.onStartCamera,
+    required this.onStartGallery,
     required this.onExport,
     required this.onImport,
   });
 
   final Translations t;
   final List<SavedCode> codes;
-  final ValueChanged<SavedCode> onOpen;
+  final Future<void> Function(SavedCode updated) onUpdate;
+  final Future<void> Function(SavedCode newCode) onAddCode;
   final ValueChanged<String> onDelete;
   final ValueChanged<String> onTogglePin;
   final ValueChanged<String> onTogglePaid;
   final void Function(String id, double amount) onAmountUpdated;
   final ValueChanged<String> onCopy;
   final void Function(SavedCode code) onShare;
-  final VoidCallback onAddPressed;
+  final VoidCallback onStartCamera;
+  final VoidCallback onStartGallery;
   final VoidCallback onExport;
   final VoidCallback onImport;
 
@@ -133,9 +139,98 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
           setState(() {});
         },
         onEditDetails: () {
-          Navigator.of(ctx).pop();
-          widget.onOpen(code);
+          // QuickQrSheet se sam zatvara pre onEditDetails poziva.
+          // Otvaramo zaseban ekran za izmenu svih detalja bez ikakvog dodatnog pop-a!
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => EditSavedCodeScreen(
+                t: widget.t,
+                code: code,
+                isEditingExisting: true,
+                onSave: (updated) async {
+                  await widget.onUpdate(updated);
+                  if (mounted) setState(() {});
+                },
+                onDelete: (id) async {
+                  widget.onDelete(id);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ),
+          );
         },
+      ),
+    );
+  }
+
+  void _showAddCodeDialog() {
+    final t = widget.t;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 38,
+              height: 5,
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              decoration: BoxDecoration(
+                color: AppColors.stone200,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.emerald600),
+              title: Text(t.addViaCamera),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                Navigator.of(context).pop();
+                widget.onStartCamera();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.emerald600),
+              title: Text(t.addViaGallery),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                Navigator.of(context).pop();
+                widget.onStartGallery();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: AppColors.emerald600),
+              title: Text(t.addViaManual),
+              onTap: () {
+                Navigator.of(sheetCtx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => EditSavedCodeScreen(
+                      t: widget.t,
+                      code: SavedCode(
+                        id: DateTime.now().microsecondsSinceEpoch.toString(),
+                        createdAt: DateTime.now(),
+                        title: '',
+                        kind: SavedCodeKind.ownAccount,
+                        data: InvoiceData(),
+                      ),
+                      isEditingExisting: false,
+                      onSave: (newCode) async {
+                        await widget.onAddCode(newCode);
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -313,7 +408,7 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
             width: double.infinity,
             height: 52,
             child: FilledButton.icon(
-              onPressed: widget.onAddPressed,
+              onPressed: _showAddCodeDialog,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.emerald600,
                 foregroundColor: Colors.white,
