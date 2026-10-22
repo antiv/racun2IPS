@@ -1,0 +1,4 @@
+// Verzija extension-a mora biti ista kao verzija aplikacije (App Store provera),
+// pa se FLUTTER_BUILD_NAME/NUMBER uzimaju iz Flutter-ovog Generated.xcconfig.
+// Pods se namerno ne uključuju — extension ne linkuje Flutter ni pluginove.
+#include "../Flutter/Generated.xcconfig"

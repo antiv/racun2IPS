@@ -83,6 +83,13 @@ library (no Bloc/Riverpod/Provider).
    1.5s from `HomeScreen` (`_checkSharedImage`) — intentional, because Android
    intent delivery on resume is unreliable; don't replace this with a one-shot
    check.
+3. iOS "Share" goes through the `ShareExtension` target (`ios/ShareExtension/`):
+   it writes the PDF/image (converted to JPEG)/text into the App Group
+   container `group.rs.antonijevic.invoice2ips` and opens the app via the
+   `invoice2ips://` URL scheme. `AppDelegate` answers the same
+   `getSharedPayload` call by reading (and deleting) that payload, so the Dart
+   polling above works unchanged. Release signing is manual: the extension
+   needs its own profile, `Invoice2IPS Share AppStore` (see `deploy_ios.sh`).
 
 Both paths funnel into `_processInvoice`, which calls
 `lib/services/gemini_service.dart`.

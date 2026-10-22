@@ -118,6 +118,7 @@ cat > "$EXPORT_PLIST" <<PLIST
   <key>provisioningProfiles</key>
   <dict>
     <key>rs.antonijevic.invoice2ips</key><string>Invoice2IPS AppStore</string>
+    <key>rs.antonijevic.invoice2ips.ShareExtension</key><string>Invoice2IPS Share AppStore</string>
   </dict>
   <key>destination</key><string>export</string>
   <key>uploadSymbols</key><true/>

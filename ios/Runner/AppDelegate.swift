@@ -14,8 +14,9 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
-    // Kanal deli ime sa Androidom: deljenje intentom (getSharedPayload) na iOS-u
-    // vraća nil, a renderPdfPages renderuje PDF preko PDFKit-a.
+    // Kanal deli ime sa Androidom: getSharedPayload čita sadržaj koji je Share
+    // Extension ostavio u App Group kontejneru, a renderPdfPages renderuje PDF
+    // preko PDFKit-a.
     guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "Invoice2IpsShared") else {
       return
     }
@@ -26,8 +27,10 @@ import UIKit
 
     channel.setMethodCallHandler { call, result in
       switch call.method {
-      case "getSharedImage", "getSharedPayload":
+      case "getSharedImage":
         result(nil)
+      case "getSharedPayload":
+        result(Self.takeSharedPayload())
       case "renderPdfPages":
         guard
           let args = call.arguments as? [String: Any],
@@ -60,6 +63,38 @@ import UIKit
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  /// Preuzima (i briše) sadržaj koji je ShareExtension upisao u App Group
+  /// kontejner, u istom obliku kao Android: {type, bytes | text}.
+  private static func takeSharedPayload() -> [String: Any]? {
+    guard let container = FileManager.default.containerURL(
+      forSecurityApplicationGroupIdentifier: "group.rs.antonijevic.invoice2ips"
+    ) else {
+      return nil
+    }
+    let metaURL = container.appendingPathComponent("shared_payload.json")
+    let payloadURL = container.appendingPathComponent("shared_payload.bin")
+    guard
+      let metaData = try? Data(contentsOf: metaURL),
+      let meta = try? JSONSerialization.jsonObject(with: metaData) as? [String: Any],
+      let type = meta["type"] as? String
+    else {
+      return nil
+    }
+    defer {
+      try? FileManager.default.removeItem(at: metaURL)
+      try? FileManager.default.removeItem(at: payloadURL)
+    }
+    var payload: [String: Any] = ["type": type]
+    if let text = meta["text"] as? String {
+      payload["text"] = text
+    } else if let bytes = try? Data(contentsOf: payloadURL) {
+      payload["bytes"] = FlutterStandardTypedData(bytes: bytes)
+    } else {
+      return nil
+    }
+    return payload
   }
 
   /// Čita tekstualni sloj PDF-a za iste stranice koje se renderuju (sve do 3,
