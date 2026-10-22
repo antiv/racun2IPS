@@ -376,7 +376,7 @@ const translations = <Language, Translations>{
     reference: 'Reference',
     paymentCode: 'Payment Code',
     scanInstruction:
-        'Scan this code with your mobile banking app to pay instanly.',
+        'Scan this code with your mobile banking app to pay instantly.',
     scanAnother: 'Scan Another',
     errorTitle: 'Something went wrong',
     tryAgain: 'Try Again',

@@ -4,34 +4,37 @@
 
 ## Upotreba
 
-**1.** Napravi snimke ekrana na telefonu ili simulatoru i ubaci ih ovde:
-
-```
-marketing/screenshots/raw/result.png
-marketing/screenshots/raw/scan.png
-marketing/screenshots/raw/saved.png
-marketing/screenshots/raw/share.png
-```
-
-Imena moraju biti tačno ovakva — po njima se biraju odgovarajući natpisi. Slajd `privacy` nema zaseban snimak ekrana, već se automatski generiše iz ikonice aplikacije (`assets/icon/appstore.png`).
-
-**2.** Pokreni generator:
+Sirovi snimci se ne prave na simulatoru/emulatoru, već iz dizajna:
+`render_raw.py` ima HTML kopije ekrana aplikacije (iste boje, Inter font,
+Lucide ikonice iz fonta koji koristi aplikacija, pravi IPS QR kodovi za demo
+podatke) i renderuje ih headless Chrome-om u 1320 × 2868, na srpskom i
+engleskom.
 
 ```sh
+# samo kad se menjaju demo podaci u QR kodovima -> design/qr.json
+fvm flutter test marketing/screenshots/qr_svg_test.dart
+
+# sirovi snimci -> raw/<locale>/ (iPhone 1320 × 2868) i raw_ipad/<locale>/ (iPad 2064 × 2752)
+python3 marketing/screenshots/render_raw.py
+python3 marketing/screenshots/render_raw.py --device ipad --locale en   # samo deo
+
+# gotove store slike sa natpisima -> out/<platform>/<locale>/
 python3 marketing/screenshots/make_screenshots.py
+python3 marketing/screenshots/make_screenshots.py --locale sr --platform play
 ```
 
-Možeš filtrirati po jeziku i platformi:
+Na iPad-u ekrani prate aplikaciju: početni ekran i rezultat su kolona od 448
+(kao `HomeScreen`), sačuvani kodovi idu celom širinom, a brzi QR prikaz je
+bottom sheet od najviše 640. Kad se promeni izgled ekrana u aplikaciji,
+uskladi markup u `render_raw.py`.
+Slajd `privacy` nema snimak ekrana, već se generiše iz ikonice aplikacije
+(`assets/icon/appstore.png`).
 
-```sh
-python3 marketing/screenshots/make_screenshots.py --locale sr --platform ios
-python3 marketing/screenshots/make_screenshots.py --locale en --platform play
-```
-
-**3.** Rezultat je u `out/<platform>/<locale>/`, numerisan redosledom za direktan upload:
+Rezultat je numerisan redosledom za direktan upload:
 
 ```
 out/ios/sr/1-result.png      1320 × 2868   (iPhone 6.9")
+out/ipad/en/1-result.png     2064 × 2752   (iPad 13" — obavezno, aplikacija je univerzalna)
 out/play/sr/2-scan.png       1080 × 1920   (Google Play 9:16)
 ```
 
@@ -41,7 +44,7 @@ out/play/sr/2-scan.png       1080 × 1920   (Google Play 9:16)
 - **2. AI Čitanje (scan.png):** Prikazuje proces skeniranja i uvoza slika uplatnica sa automatskim izvlačenjem iznosa, računa i poziva na broj.
 - **3. Privatnost (privacy - tekstualni slajd):** Naglašava rad bez registracije, pretplate i bez slanja privatnih podataka na spoljne servere van AI ekstrakcije.
 - **4. Sačuvani kodovi (saved.png):** Organizacija redovnih računa i kreiranje sopstvenog IPS QR koda za uplate.
-- **5. Deljenje i Backup (share.png):** Slanje kodova drugima i rezervne kopije podataka.
+- **5. Deljenje (share.png):** Brzi QR prikaz sačuvanog računa sa kopiranjem, deljenjem i oznakom plaćanja.
 
 ## Dizajn i brending
 
@@ -51,10 +54,10 @@ out/play/sr/2-scan.png       1080 × 1920   (Google Play 9:16)
 
 ## Zavisnosti
 
-Potrebna je biblioteka Pillow (Python Imaging Library):
+Potrebni su Google Chrome (za `render_raw.py`) i biblioteka Pillow:
 
 ```sh
 python3 -m pip install Pillow
 ```
 
-`out/` folder se ne commit-uje u Git (generisani fajlovi), dok se sirovi snimci u `raw/` zadržavaju za kasnija ažuriranja.
+`out/` se generiše ponovo posle svake promene; `raw/` i `design/qr.json` se zadržavaju u gitu.

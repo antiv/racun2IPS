@@ -10,7 +10,9 @@ Upotreba:
     python3 make_screenshots.py --locale sr
     python3 make_screenshots.py --platform ios
 
-Ulaz:  marketing/screenshots/raw/<slug>.png
+Ulaz:  marketing/screenshots/raw/<locale>/<slug>.png (render_raw.py), za iPad
+       marketing/screenshots/raw_ipad/<locale>/<slug>.png; a ako nema snimka za
+       taj jezik, marketing/screenshots/raw/<slug>.png
 Izlaz: marketing/screenshots/out/<platform>/<locale>/<n>-<slug>.png
 
 Sirovi snimci se imenuju po slug-u iz SLIDES: result, scan, saved, share.
@@ -27,6 +29,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent
 RAW = ROOT / "raw"
+# iPad snimci (render_raw.py --device ipad).
+RAW_IPAD = ROOT / "raw_ipad"
 OUT = ROOT / "out"
 ICON = ROOT.parent.parent / "assets" / "icon" / "appstore.png"
 
@@ -42,6 +46,8 @@ INK = (0xFF, 0xFF, 0xFF)
 # Play: 9:16 unutar dozvoljenog opsega, 1080x1920 je siguran izbor.
 PLATFORMS = {
     "ios": (1320, 2868),
+    # iPad: 13" (2064x2752) — obavezan jer je aplikacija univerzalna.
+    "ipad": (2064, 2752),
     "play": (1080, 1920),
 }
 
@@ -141,7 +147,15 @@ def shadow_behind(canvas: Image.Image, box: tuple[int, int, int, int], radius: i
     canvas.alpha_composite(layer)
 
 
-def build_slide(slug: str, caption: str, size: tuple[int, int]) -> Image.Image:
+def raw_shot(slug: str, locale: str, platform: str) -> Path:
+    """Snimak ekrana na jeziku natpisa (za iPad iz raw_ipad), inače zajednički."""
+    localized = (RAW_IPAD if platform == "ipad" else RAW) / locale / f"{slug}.png"
+    return localized if localized.exists() else RAW / f"{slug}.png"
+
+
+def build_slide(
+    slug: str, locale: str, platform: str, caption: str, size: tuple[int, int]
+) -> Image.Image:
     w, h = size
     canvas = gradient(size).convert("RGBA")
     draw = ImageDraw.Draw(canvas)
@@ -161,7 +175,7 @@ def build_slide(slug: str, caption: str, size: tuple[int, int]) -> Image.Image:
     avail_h = h - top_of_device - round(h * 0.05)
     avail_w = w - 2 * margin
 
-    source = RAW / f"{slug}.png"
+    source = raw_shot(slug, locale, platform)
     if slug == "privacy" or not source.exists():
         # Tekstualni slajd: samo ikonica, bez snimka ekrana.
         if ICON.exists():
@@ -196,7 +210,7 @@ def main() -> int:
     locales = args.locale or sorted(CAPTIONS)
     platforms = args.platform or sorted(PLATFORMS)
 
-    if not RAW.exists() or not any(RAW.glob("*.png")):
+    if not RAW.exists() or not any(RAW.glob("**/*.png")):
         print(f"Nema sirovih snimaka u {RAW}", file=sys.stderr)
         print(
             "Ubaci snimke ekrana imenovane: "
@@ -205,9 +219,6 @@ def main() -> int:
         )
         return 1
 
-    missing = [s for s in SLIDES if s != "privacy" and not (RAW / f"{s}.png").exists()]
-    if missing:
-        print(f"Upozorenje: nedostaju {', '.join(missing)} — ti slajdovi se preskaču.")
 
     total = 0
     for platform in platforms:
@@ -217,10 +228,11 @@ def main() -> int:
             dest.mkdir(parents=True, exist_ok=True)
             n = 0
             for slug in SLIDES:
-                if slug != "privacy" and not (RAW / f"{slug}.png").exists():
+                if slug != "privacy" and not raw_shot(slug, locale, platform).exists():
+                    print(f"Upozorenje: nema snimka {slug} ({locale}) — slajd se preskače.")
                     continue
                 n += 1
-                img = build_slide(slug, CAPTIONS[locale][slug], size)
+                img = build_slide(slug, locale, platform, CAPTIONS[locale][slug], size)
                 path = dest / f"{n}-{slug}.png"
                 img.save(path, "PNG", optimize=True)
                 total += 1
