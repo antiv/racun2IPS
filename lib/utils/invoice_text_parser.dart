@@ -367,8 +367,13 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
     if (_containsAny(lower, const ['poziv na broj', 'odobrenje'])) {
       // Na uplatnici je vrednost često 2-3 linije ispod labele (između su
       // labele susednih polja, npr. "Broj modela").
+      // Ispod labele se gledaju samo redovi koji liče na vrednost (bez reči i
+      // dvotačke) — inače se pokupi broj iz rečenice, npr. svrhe uplate
+      // "Uplata po računu broj 21850/26".
       final searchLines = [
-        for (var k = i; k <= i + 3 && k < lines.length; k++) lines[k],
+        lines[i],
+        for (var k = i + 1; k <= i + 3 && k < lines.length; k++)
+          if (!RegExp(r'[a-zčćžšđ:]').hasMatch(lines[k])) lines[k],
       ];
       for (final sLine in searchLines) {
         final cleanedLine = sLine.replaceFirst(

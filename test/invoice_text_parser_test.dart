@@ -211,5 +211,27 @@ Glavna 1
       expect(data.recipientName, 'EPS AD Beograd');
       expect(data.referenceNumber, '97921234567890');
     });
+
+    test('poziv na broj se ne uzima iz rečenice svrhe uplate', () {
+      const text = '''
+Ukupno za uplatu:
+400,00
+Platilac:
+Petar Petrović
+Tekući račun primaoca
+160-0000000012345-95
+Broj modela
+Poziv na broj
+Svrha uplate:
+Uplata po računu broj 21850/26
+089-024
+Primalac:
+PRIMER ODRŽAVANJE DOO
+''';
+      final data = tryParseInvoiceText(text);
+      expect(data, isNotNull);
+      expect(data!.referenceNumber, '00089-024');
+      expect(data.purpose, 'Uplata po računu broj 21850/26');
+    });
   });
 }

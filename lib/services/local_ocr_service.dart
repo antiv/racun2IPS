@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/invoice_data.dart';
@@ -41,6 +43,76 @@ class LocalOcrService {
   Future<InvoiceData?> tryExtractFromFile(String filePath) async {
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
+      final result = await _recognizeAndParse(recognizer, filePath);
+      if (result != null || !Platform.isIOS) return result;
+      // ML Kit na iOS-u (za razliku od Androida) ne čita bočno okrenut tekst,
+      // npr. uplatnicu slikanu poprečno — probaj sliku okrenutu za 90° i 270°.
+      return await _recognizeRotated(recognizer, filePath);
+    } finally {
+      await recognizer.close();
+    }
+  }
+
+  Future<InvoiceData?> _recognizeRotated(
+    TextRecognizer recognizer,
+    String filePath,
+  ) async {
+    final rotatedFiles = <File>[];
+    try {
+      final bytes = await File(filePath).readAsBytes();
+      final variants = await Isolate.run(() => _rotatedVariants(bytes));
+      final dir = await getTemporaryDirectory();
+      final stamp = DateTime.now().microsecondsSinceEpoch;
+      for (var i = 0; i < variants.length; i++) {
+        final file = File('${dir.path}/ips_ocr_rotated_${stamp}_$i.jpg');
+        await file.writeAsBytes(variants[i], flush: true);
+        rotatedFiles.add(file);
+        final result = await _recognizeAndParse(recognizer, file.path);
+        if (result != null) {
+          debugPrint('LocalOcrService: uspešno parsirano iz okrenute slike');
+          return result;
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('LocalOcrService rotation error: $e');
+      return null;
+    } finally {
+      for (final f in rotatedFiles) {
+        try {
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Slika okrenuta za 90° i 270° (EXIF rotacija upisana u piksele), smanjena
+  /// na najviše 3000px da OCR ostane brz.
+  static List<Uint8List> _rotatedVariants(Uint8List bytes) {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return const [];
+    var upright = img.bakeOrientation(decoded);
+    final longest = math.max(upright.width, upright.height);
+    if (longest > 3000) {
+      final factor = 3000 / longest;
+      upright = img.copyResize(
+        upright,
+        width: (upright.width * factor).round(),
+        height: (upright.height * factor).round(),
+        interpolation: img.Interpolation.average,
+      );
+    }
+    return [
+      for (final angle in const [90, 270])
+        img.encodeJpg(img.copyRotate(upright, angle: angle), quality: 92),
+    ];
+  }
+
+  Future<InvoiceData?> _recognizeAndParse(
+    TextRecognizer recognizer,
+    String filePath,
+  ) async {
+    try {
       final inputImage = InputImage.fromFilePath(filePath);
       final recognized = await recognizer.processImage(inputImage);
       debugPrint(
@@ -71,8 +143,6 @@ class LocalOcrService {
     } catch (e) {
       debugPrint('LocalOcrService processImage error: $e');
       return null;
-    } finally {
-      await recognizer.close();
     }
   }
 
