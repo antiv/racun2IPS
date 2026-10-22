@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Update the text and phone screenshots of one Google Play store listing.
+"""Update the text, promo video and phone screenshots of one Google Play listing.
 
 Based on bird_tracker's play_screenshots.py: one Play Developer API "edit" —
 open, set the short and full description of one language, replace its phone
 screenshots with the given images in file name order, commit. The title, the
 feature graphic, the icon and every other language stay as they are.
 
-    play_listing.py <package name> --texts store-listing.json --images <dir>
+    play_listing.py <package name> --texts store-listing.json [--images <dir>]
                     [--language sr] [--key sa.json] [--send-for-review] [--dry-run]
 
 --texts is the JSON from marketing/store-listing.json; its "google_play"
-section holds {"<language>": {"shortDescription": ..., "fullDescription": ...}}.
+section holds {"<language>": {"shortDescription": ..., "fullDescription": ...,
+"video": "<YouTube URL>"}} ("video" optional). Without --images the screenshots
+stay as they are.
 By default the edit is committed WITHOUT sending it for review (needs Managed
 publishing on in Play Console — otherwise Play refuses and nothing changes): the changes
 wait in Play Console (Publishing overview) and go out together with the next
@@ -57,7 +59,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("package", help="applicationId, e.g. rs.antonijevic.invoice2ips")
     parser.add_argument("--texts", required=True, help="store-listing.json")
-    parser.add_argument("--images", required=True, help="phone screenshots, uploaded in file name order")
+    parser.add_argument("--images", help="phone screenshots, uploaded in file name order (optional)")
     parser.add_argument("--language", default="sr", help="listing language (default: sr)")
     parser.add_argument("--key", default=os.environ.get("PLAY_SERVICE_ACCOUNT_JSON"),
                         help="service account JSON key (default: $PLAY_SERVICE_ACCOUNT_JSON)")
@@ -77,10 +79,12 @@ def main():
             fail(f"{field} for {args.language} is empty")
         if len(texts[field]) > limit:
             fail(f"{field} for {args.language} is {len(texts[field])} characters (max {limit})")
-    files = sorted(os.path.join(args.images, name) for name in os.listdir(args.images)
-                   if name.lower().endswith(EXTENSIONS))
-    if not files or len(files) > MAX_IMAGES:
-        fail(f"{len(files)} images in {args.images} — Play takes 1 to {MAX_IMAGES}")
+    files = []
+    if args.images:
+        files = sorted(os.path.join(args.images, name) for name in os.listdir(args.images)
+                       if name.lower().endswith(EXTENSIONS))
+        if not files or len(files) > MAX_IMAGES:
+            fail(f"{len(files)} images in {args.images} — Play takes 1 to {MAX_IMAGES}")
 
     credentials = service_account.Credentials.from_service_account_file(args.key, scopes=SCOPES)
     edits = build("androidpublisher", "v3", credentials=credentials, cache_discovery=False).edits()
@@ -102,21 +106,29 @@ def main():
         for field in LIMITS:
             same = listing.get(field, "").strip() == texts[field].strip()
             print(f"    {dry}{field}: {'unchanged' if same else 'update'} ({len(texts[field])} chars)")
-        print(f"    {dry}phoneScreenshots: replace {len(current)} with {len(files)}:")
-        for path in files:
-            print(f"      {os.path.basename(path)} ({os.path.getsize(path) / 1e3:.0f} kB)")
+        if texts.get("video"):
+            old, new = listing.get("video") or "none", texts["video"]
+            print(f"    {dry}video: " + ("unchanged" if old == new else f"{old} → {new}"))
+        if files:
+            print(f"    {dry}phoneScreenshots: replace {len(current)} with {len(files)}:")
+            for path in files:
+                print(f"      {os.path.basename(path)} ({os.path.getsize(path) / 1e3:.0f} kB)")
+        else:
+            print("    phoneScreenshots: unchanged (no --images)")
 
         if args.dry_run:
             edits.delete(packageName=package, editId=edit_id).execute()
             print("✓ dry run: nothing was changed")
             return
 
-        edits.listings().patch(packageName=package, editId=edit_id, language=language, body={
-            "shortDescription": texts["shortDescription"],
-            "fullDescription": texts["fullDescription"],
-        }).execute()
+        body = {"shortDescription": texts["shortDescription"],
+                "fullDescription": texts["fullDescription"]}
+        if texts.get("video"):
+            body["video"] = texts["video"]
+        edits.listings().patch(packageName=package, editId=edit_id, language=language,
+                               body=body).execute()
         print("    texts updated")
-        if current:
+        if files and current:
             edits.images().deleteall(packageName=package, editId=edit_id, language=language,
                                      imageType="phoneScreenshots").execute()
         for path in files:
@@ -143,7 +155,9 @@ def main():
     except HttpError as error:
         fail(f"Play API {error.resp.status}: {api_message(error)}")
 
-    print(f"✓ {language} listing of {package}: texts and {len(files)} phone screenshots")
+    print(f"✓ {language} listing of {package}: texts"
+          f"{', video' if texts.get('video') else ''}"
+          f"{f' and {len(files)} phone screenshots' if files else ''}")
 
 
 if __name__ == "__main__":
