@@ -12,6 +12,14 @@
 -keep class com.google.android.play.core.splitinstall.** { *; }
 -keep class com.google.android.play.core.tasks.** { *; }
 
+# Google ML Kit: interni kod (telemetrija, LazyInstanceMap, registracija
+# komponenti) se oslanja na refleksiju — bez ovoga R8 u release buildu obori
+# InputImage.fromFilePath sa NullPointerException, pa QR skener i OCR uvek
+# padaju na AI.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-keep class com.google_mlkit_** { *; }
+
 # Google ML Kit (optional language packs referenced by plugin)
 -dontwarn com.google.mlkit.vision.text.chinese.**
 -dontwarn com.google.mlkit.vision.text.devanagari.**
