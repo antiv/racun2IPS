@@ -129,4 +129,87 @@ Račun primaoca: 840-0000711171843-84
       expect(data.referenceNumber, contains('17020043775032609'));
     });
   });
+
+  group('tryParseInvoiceText — redosled teksta iz OCR-a po kolonama', () {
+    // Latinični račun fotografisan kamerom: labele posle vrednosti, datum
+    // "Rok za plaćanje" pre iznosa, platilac odmah ispod "Primalac:" i poziv
+    // na broj dve linije ispod labele (između je "Broj modela").
+    const ocrText = '''
+Račun broj: 1234/26
+Rok za plaćanje:
+21.10.2026
+Za uplatu
+Cena
+Količina
+400,00
+1,00
+Zaduženje po računu:
+400,00
+Ukupno za uplatu:
+NALOG ZA UPLATU
+Platilac:
+189
+RSD
+Petar Petrović
+Tekući račun primaoca
+160-0000000012345-95
+Bulevar Oslobođenja 12
+Poziv na broj
+Broj modela
+Svrha uplate:
+089-024
+Uplata po računu broj 1234/26
+Platilac:
+Primalac:
+Petar Petrović
+PRIMER ODRŽAVANJE DOO
+Glavna 1
+11070 Novi Beograd
+''';
+
+    test('datum se ne čita kao iznos, a labela posle vrednosti važi', () {
+      final data = tryParseInvoiceText(ocrText);
+      expect(data, isNotNull);
+      expect(data!.amount, closeTo(400.0, 0.001));
+    });
+
+    test('poziv na broj se nalazi i nekoliko linija ispod labele', () {
+      final data = tryParseInvoiceText(ocrText);
+      expect(data!.referenceNumber, '00089-024');
+      expect(data.purpose, 'Uplata po računu broj 1234/26');
+    });
+
+    test('platilac ispod labele "Primalac" se preskače', () {
+      final data = tryParseInvoiceText(ocrText);
+      expect(data!.recipientName, 'PRIMER ODRŽAVANJE DOO');
+      expect(data.accountNumber, '160000000001234595');
+    });
+
+    test('procenat i iznos iz rečenice ne potiskuju pravi iznos (ćirilica)', () {
+      const text = '''
+ЕПС АД Београд
+2.894,64 дин
+ЗА УПЛАТУ ЗА ЕЛЕКТРИЧНУ ЕНЕРГИЈУ (А+Б)
+Рок за плаћање: 28.10.2026.
+-24,62
+Уплатом од 2.894,64 динара остварујете један од следећих попуста.
+Текући рачун примаоца
+190-99870-10
+Позив на број
+Број модела
+97
+92-1234567890
+Платилац:
+ПЕТАР ПЕТРОВИЋ
+Прималац:
+БУЛЕВАР ОСЛОБОЂЕЊА 12
+ЕПС АД Београд
+''';
+      final data = tryParseInvoiceText(text);
+      expect(data, isNotNull);
+      expect(data!.amount, closeTo(2894.64, 0.001));
+      expect(data.recipientName, 'EPS AD Beograd');
+      expect(data.referenceNumber, '97921234567890');
+    });
+  });
 }

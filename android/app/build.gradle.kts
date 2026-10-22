@@ -73,3 +73,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Tekstualni sloj PDF računa (Android PdfRenderer ne izvlači tekst pre API 35).
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+}

@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 
 /// Kanal ka native sloju (MainActivity na Androidu / AppDelegate na iOS-u):
 /// 1. Preuzima sliku, PDF dokument ili tekst podeljen iz druge aplikacije (ACTION_SEND / ACTION_VIEW),
-/// 2. Renderuje stranice PDF dokumenta u PNG slike pomoću ugrađenog OS PDF renderer-a.
+/// 2. Renderuje stranice PDF dokumenta u PNG slike pomoću ugrađenog OS PDF renderer-a,
+/// 3. Čita tekstualni sloj PDF dokumenta (PDFKit / pdfbox-android).
 const _channel = MethodChannel('rs.antonijevic.invoice2ips/shared');
 
 enum SharedPayloadType { image, pdf, text }
@@ -82,6 +83,22 @@ Future<List<Uint8List>> renderPdfPages(Uint8List pdfBytes) async {
     return pages;
   } catch (e, stack) {
     debugPrint('renderPdfPages error: $e\n$stack');
+    return const [];
+  }
+}
+
+/// Tekstualni sloj PDF-a za iste stranice koje vraća [renderPdfPages]
+/// (prazan string za stranicu bez teksta, npr. skeniran PDF).
+Future<List<String>> extractPdfText(Uint8List pdfBytes) async {
+  try {
+    final result = await _channel.invokeMethod<dynamic>(
+      'extractPdfText',
+      {'bytes': pdfBytes},
+    );
+    if (result is! List) return const [];
+    return result.map((e) => e?.toString() ?? '').toList();
+  } catch (e) {
+    debugPrint('extractPdfText error: $e');
     return const [];
   }
 }

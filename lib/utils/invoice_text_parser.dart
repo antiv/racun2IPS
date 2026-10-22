@@ -157,9 +157,11 @@ String? _extractValidAccountNumber(String fullText, List<String> lines) {
 double? _extractAmount(String fullText, List<String> lines) {
   final candidates = <_ScoredCandidate<double>>[];
 
-  // Srpski format iznosa sa 2 decimale: npr. = 1.234,56 ili 12.345,67 ili 450,00
+  // Srpski format iznosa sa 2 decimale: npr. = 1.234,56 ili 12.345,67 ili 450,00.
+  // Lookaround sprečava da se deo datuma ("21.10.2026" → 21,10), dužeg broja
+  // ili negativna vrednost (procenat "-24,62") pročita kao iznos.
   final amountRegex = RegExp(
-    r'(?:=\s*)?(\d{1,3}(?:[.\s]\d{3})+,\d{2}|\d+[.,]\d{2})\b',
+    r'(?:=\s*)?(?<![\d.,\-])(\d{1,3}(?:[.\s]\d{3})+,\d{2}|\d+[.,]\d{2})(?![.,]?\d)',
   );
 
   for (var i = 0; i < lines.length; i++) {
@@ -167,7 +169,12 @@ double? _extractAmount(String fullText, List<String> lines) {
     final lower = line.toLowerCase();
     final prevLower = i > 0 ? lines[i - 1].toLowerCase() : '';
     final nextLower = i + 1 < lines.length ? lines[i + 1].toLowerCase() : '';
-    final context = '$prevLower $lower';
+    // OCR po kolonama često vrati vrednost pre labele ("400,00" pa "Ukupno za
+    // uplatu:"), pa se ključne reči traže i u sledećoj liniji — ali samo ako je
+    // ona čista labela, a ne rečenica sa sopstvenim iznosom.
+    final nextIsLabel = i + 1 < lines.length &&
+        !amountRegex.hasMatch(lines[i + 1]);
+    final context = '$prevLower $lower ${nextIsLabel ? nextLower : ''}';
 
     for (final match in amountRegex.allMatches(line)) {
       final fullMatch = match.group(0)!;
@@ -205,7 +212,7 @@ double? _extractAmount(String fullText, List<String> lines) {
       }
 
       // Valuta u istoj ili susednoj liniji
-      if (_containsAny('$context $nextLower', const ['rsd', 'din', 'дин'])) {
+      if (_containsAny(context, const ['rsd', 'din', 'дин'])) {
         score += 30;
       }
 
@@ -358,9 +365,10 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
   for (var i = 0; i < lines.length; i++) {
     final lower = lines[i].toLowerCase();
     if (_containsAny(lower, const ['poziv na broj', 'odobrenje'])) {
+      // Na uplatnici je vrednost često 2-3 linije ispod labele (između su
+      // labele susednih polja, npr. "Broj modela").
       final searchLines = [
-        lines[i],
-        if (i + 1 < lines.length) lines[i + 1],
+        for (var k = i; k <= i + 3 && k < lines.length; k++) lines[k],
       ];
       for (final sLine in searchLines) {
         final cleanedLine = sLine.replaceFirst(
@@ -394,8 +402,34 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
   return const _RefExtraction('', isReliable: true);
 }
 
+final _entityRegex = RegExp(
+  r'\b(J\.?K\.?P\.?|J\.?P\.?|D\.?O\.?O\.?|A\.?D\.?|EPS\s+SNABDEVANJE|ELEKTROPRIVREDA|INFOSTAN|INFORMATIKA|TELEKOM\s+SRBIJA|YETTEL|A1\s+SRBIJA|SBB\s|UPRAVA\s+ZA\s+TREZOR|PORESKA\s+UPRAVA|STAMBENA\s+ZAJEDNICA)\b',
+  caseSensitive: false,
+);
+
+/// Imena platioca: prva ne-labela ispod svake labele "Platilac"/"Uplatilac".
+/// OCR uplatnice po kolonama zna da ubaci platioca odmah ispod "Primalac".
+Set<String> _payerNames(List<String> lines) {
+  final names = <String>{};
+  for (var i = 0; i < lines.length; i++) {
+    final lower = lines[i].toLowerCase();
+    if (!lower.startsWith('platilac') && !lower.startsWith('uplatilac')) continue;
+    for (var k = i + 1; k <= i + 3 && k < lines.length; k++) {
+      final candidate = lines[k].trim();
+      final candLower = candidate.toLowerCase();
+      // Sledeća labela polja — blok platioca je prazan u ovom redosledu.
+      if (candLower.endsWith(':') || candLower.startsWith('primalac')) break;
+      if (_isLabelOrNoise(candidate)) continue;
+      names.add(candLower);
+      break;
+    }
+  }
+  return names;
+}
+
 /// Izvlači naziv primaoca iz linija oko labele "Primalac" ili prepoznaje pravnu formu.
 String? _extractRecipientName(List<String> lines, String accountNumber) {
+  final payers = _payerNames(lines);
   // 1. Traži eksplicitnu labelu "Primalac" (ali ne "Račun primaoca")
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i];
@@ -422,23 +456,33 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
         return inline;
       }
 
-      // Slučaj B: Naziv je u sledećim linijama ispod labele "Primalac"
-      for (var offset = 1; offset <= 3 && i + offset < lines.length; offset++) {
+      // Slučaj B: Naziv je u sledećim linijama ispod labele "Primalac".
+      // Preskače se platilac; prednost ima pravno lice, pa linija bez cifara
+      // (adrese platioca/primaoca obično imaju broj).
+      final candidates = <String>[];
+      for (var offset = 1; offset <= 4 && i + offset < lines.length; offset++) {
         final candidate = lines[i + offset].trim();
-        if (candidate.length >= 3 && !_isLabelOrNoise(candidate)) {
-          return candidate;
+        if (candidate.length >= 3 &&
+            !_isLabelOrNoise(candidate) &&
+            !payers.contains(candidate.toLowerCase())) {
+          candidates.add(candidate);
         }
+      }
+      if (candidates.isNotEmpty) {
+        return candidates.firstWhere(
+          _entityRegex.hasMatch,
+          orElse: () => candidates.firstWhere(
+            (c) => !RegExp(r'\d').hasMatch(c),
+            orElse: () => candidates.first,
+          ),
+        );
       }
     }
   }
 
   // 2. Fallback: Prepoznaj liniju sa tipičnim srpskim privrednim subjektima / javnim preduzećima
-  final entityRegex = RegExp(
-    r'\b(J\.?K\.?P\.?|J\.?P\.?|D\.?O\.?O\.?|A\.?D\.?|EPS\s+SNABDEVANJE|ELEKTROPRIVREDA|INFOSTAN|INFORMATIKA|TELEKOM\s+SRBIJA|YETTEL|A1\s+SRBIJA|SBB\s|UPRAVA\s+ZA\s+TREZOR|PORESKA\s+UPRAVA|STAMBENA\s+ZAJEDNICA)\b',
-    caseSensitive: false,
-  );
   for (final line in lines) {
-    if (entityRegex.hasMatch(line) &&
+    if (_entityRegex.hasMatch(line) &&
         line.length >= 4 &&
         line.length <= 80 &&
         !_isLabelOrNoise(line)) {
@@ -469,7 +513,7 @@ String? _extractPurpose(List<String> lines) {
           !_isLabelOrNoise(inline)) {
         return inline;
       }
-      for (var offset = 1; offset <= 2 && i + offset < lines.length; offset++) {
+      for (var offset = 1; offset <= 4 && i + offset < lines.length; offset++) {
         final next = lines[i + offset].trim();
         if (next.length >= 3 && !_isLabelOrNoise(next)) {
           return next;
@@ -534,6 +578,12 @@ bool _isLabelOrNoise(String text) {
       lower.startsWith('uplatilac') ||
       lower.startsWith('platilac') ||
       lower.startsWith('model ') ||
+      lower.startsWith('broj modela') ||
+      lower.startsWith('tekući račun') ||
+      lower.startsWith('tekuci racun') ||
+      lower.startsWith('svrha uplate') ||
+      lower.startsWith('šif') ||
+      lower.startsWith('sif.') ||
       lower.startsWith('iznos') ||
       lower.startsWith('valuta')) {
     return true;

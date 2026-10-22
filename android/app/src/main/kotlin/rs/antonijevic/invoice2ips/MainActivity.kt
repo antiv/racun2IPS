@@ -9,6 +9,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -21,7 +24,8 @@ import kotlin.math.roundToInt
 
 /**
  * Prijem slike, PDF dokumenta ili teksta podeljenog iz druge aplikacije (ACTION_SEND),
- * kao i nativno renderovanje PDF stranica u slike pomoću Android PdfRenderer-a.
+ * nativno renderovanje PDF stranica u slike pomoću Android PdfRenderer-a i
+ * čitanje tekstualnog sloja PDF-a (pdfbox-android).
  */
 class MainActivity : FlutterActivity() {
 
@@ -47,11 +51,7 @@ class MainActivity : FlutterActivity() {
                     sharedImage = null
                 }
                 "renderPdfPages" -> {
-                    val pdfBytes = when (val raw = call.argument<Any>("bytes")) {
-                        is ByteArray -> raw
-                        is List<*> -> ByteArray(raw.size) { (raw[it] as Number).toByte() }
-                        else -> null
-                    }
+                    val pdfBytes = pdfBytesArgument(call.argument<Any>("bytes"))
                     if (pdfBytes == null || pdfBytes.isEmpty()) {
                         result.success(emptyList<ByteArray>())
                         return@setMethodCallHandler
@@ -63,6 +63,19 @@ class MainActivity : FlutterActivity() {
                         }
                     }.start()
                 }
+                "extractPdfText" -> {
+                    val pdfBytes = pdfBytesArgument(call.argument<Any>("bytes"))
+                    if (pdfBytes == null || pdfBytes.isEmpty()) {
+                        result.success(emptyList<String>())
+                        return@setMethodCallHandler
+                    }
+                    Thread {
+                        val texts = extractPdfTextPages(pdfBytes)
+                        runOnUiThread {
+                            result.success(texts)
+                        }
+                    }.start()
+                }
                 "getAppSignatureSha1" -> {
                     result.success(getAppSignatureSha1())
                 }
@@ -71,8 +84,40 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun pdfBytesArgument(raw: Any?): ByteArray? = when (raw) {
+        is ByteArray -> raw
+        is List<*> -> ByteArray(raw.size) { (raw[it] as Number).toByte() }
+        else -> null
+    }
+
     /**
-     * Renderuje stranice PDF dokumenta u PNG slike visoke rezolucije (~2000px po dužoj strani)
+     * Čita tekstualni sloj PDF-a za iste stranice koje se renderuju (sve do 3,
+     * inače 1, 2. i poslednju). PDF računi (npr. EPS) obično imaju tačan tekst
+     * na ćirilici, koji lokalni OCR (samo latinica) ne može da pročita sa slike.
+     * Skenirani PDF bez tekstualnog sloja vraća prazne stringove.
+     */
+    private fun extractPdfTextPages(pdfBytes: ByteArray): List<String> {
+        return try {
+            PDFBoxResourceLoader.init(applicationContext)
+            PDDocument.load(pdfBytes).use { document ->
+                val count = document.numberOfPages
+                val indices = if (count <= 3) (0 until count).toList() else listOf(0, 1, count - 1)
+                val stripper = PDFTextStripper()
+                indices.map { index ->
+                    stripper.startPage = index + 1
+                    stripper.endPage = index + 1
+                    stripper.getText(document)
+                }
+            }
+        } catch (_: Throwable) {
+            // Zaključan ili neispravan PDF — Dart strana nastavlja sa QR/OCR/AI tokom.
+            emptyList()
+        }
+    }
+
+    /**
+     * Renderuje stranice PDF dokumenta u PNG slike visoke rezolucije (~3000px po dužoj strani,
+     * da i sitan IPS QR kod na strani ima dovoljno piksela po modulu za ML Kit)
      * sa belom pozadinom, pogodne za QR skener, lokalni OCR i prikaz u aplikaciji.
      */
     private fun renderPdfBytesToPngPages(pdfBytes: ByteArray): List<ByteArray> {
@@ -100,7 +145,7 @@ class MainActivity : FlutterActivity() {
             for (index in indices) {
                 renderer.openPage(index).use { page ->
                     val maxDim = max(page.width, page.height).coerceAtLeast(1)
-                    val scale = max(2000f / maxDim.toFloat(), 2.0f).coerceAtMost(4.0f)
+                    val scale = max(3000f / maxDim.toFloat(), 2.0f).coerceAtMost(4.0f)
                     val width = (page.width * scale).roundToInt().coerceAtLeast(1)
                     val height = (page.height * scale).roundToInt().coerceAtLeast(1)
 

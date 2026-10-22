@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:isolate';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
@@ -36,107 +38,40 @@ class QrScannerService {
     }
   }
 
-  /// Pokušava da pronađe i parsira NBS IPS QR kod iz fajla slike na putanji [filePath].
-  Future<InvoiceData?> tryExtractIpsFromFile(String filePath) async {
-    // 1. Brzi prolaz nad originalnim fajlom.
+  /// Pokušava da pronađe i parsira NBS IPS QR kod iz fajla slike na putanji
+  /// [filePath]: brzi prolaz, pa (ako je [deep]) skeniranje isečaka.
+  Future<InvoiceData?> tryExtractIpsFromFile(
+    String filePath, {
+    bool deep = true,
+  }) async {
     final direct = await _scanFile(filePath);
-    if (direct != null) return direct;
+    if (direct != null || !deep) return direct;
+    return tryExtractIpsFromTiles(filePath);
+  }
 
-    // 2. Ako brzi prolaz nije pronašao QR kod (čest slučaj kod fotografija visoke
-    // rezolucije gde ML Kit smanjuje sliku i gubi detalje gustog IPS QR koda),
-    // normalizuj EXIF orijentaciju, optimizuj rezoluciju i proveri ključne regije.
+  /// Sporiji prolaz (nekoliko sekundi na velikoj fotografiji) nad isečcima
+  /// slike na putanji [filePath].
+  Future<InvoiceData?> tryExtractIpsFromTiles(String filePath) async {
+    // IPS QR na računu je često sitan u odnosu na celu stranu (npr. EPS
+    // PDF: ~150px na strani od 2000px, ~3px po modulu), pa ga ML Kit ne vidi.
+    // Skenira se mreža preklapajućih isečaka, uvećanih kad su mali, tako da
+    // QR u isečku bude dominantan i dovoljno krupan.
     final fallbackFiles = <File>[];
     try {
       final bytes = await File(filePath).readAsBytes();
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) return null;
+      // Dekodiranje i isecanje velikih fotografija traje — van UI niti.
+      final tiles = await Isolate.run(() => _buildTiles(bytes));
+      if (tiles.isEmpty) return null;
 
-      final oriented = img.bakeOrientation(decoded);
       final dir = await getTemporaryDirectory();
       final stamp = DateTime.now().microsecondsSinceEpoch;
-
-      // 2a. Optimizovana rezolucija (max 1600px po dužoj strani - idealno za ML Kit).
-      final maxDim =
-          oriented.width > oriented.height ? oriented.width : oriented.height;
-      if (maxDim > 1600) {
-        final scaled = img.copyResize(
-          oriented,
-          width: oriented.width > oriented.height ? 1600 : null,
-          height: oriented.height >= oriented.width ? 1600 : null,
-          interpolation: img.Interpolation.linear,
-        );
-        final scaledFile = File('${dir.path}/ips_qr_scaled_$stamp.jpg');
-        await scaledFile.writeAsBytes(
-          img.encodeJpg(scaled, quality: 90),
-          flush: true,
-        );
-        fallbackFiles.add(scaledFile);
-
-        final scaledResult = await _scanFile(scaledFile.path);
-        if (scaledResult != null) return scaledResult;
+      for (var i = 0; i < tiles.length; i++) {
+        final file = File('${dir.path}/ips_qr_tile_${stamp}_$i.jpg');
+        await file.writeAsBytes(tiles[i], flush: true);
+        fallbackFiles.add(file);
+        final result = await _scanFile(file.path);
+        if (result != null) return result;
       }
-
-      // 2b. Segmenti računa (uplatnica / leva regija gde EPS i Infostan stavljaju QR kod).
-      // Na celom A4 papiru QR kod zauzima samo mali procenat površine; u isečku je dominantan.
-      final w = oriented.width;
-      final h = oriented.height;
-
-      // Leva polovina / sredina (tipično mesto za QR na EPS i većini računa)
-      if (w > 200 && h > 200) {
-        final leftRegion = img.copyCrop(
-          oriented,
-          x: 0,
-          y: (h * 0.15).toInt(),
-          width: (w * 0.7).toInt(),
-          height: (h * 0.7).toInt(),
-        );
-        final leftFile = File('${dir.path}/ips_qr_crop_left_$stamp.jpg');
-        await leftFile.writeAsBytes(
-          img.encodeJpg(leftRegion, quality: 90),
-          flush: true,
-        );
-        fallbackFiles.add(leftFile);
-
-        final leftResult = await _scanFile(leftFile.path);
-        if (leftResult != null) return leftResult;
-
-        // Donja polovina (uplatnica)
-        final bottomRegion = img.copyCrop(
-          oriented,
-          x: 0,
-          y: (h * 0.35).toInt(),
-          width: w,
-          height: (h * 0.65).toInt(),
-        );
-        final bottomFile = File('${dir.path}/ips_qr_crop_bottom_$stamp.jpg');
-        await bottomFile.writeAsBytes(
-          img.encodeJpg(bottomRegion, quality: 90),
-          flush: true,
-        );
-        fallbackFiles.add(bottomFile);
-
-        final bottomResult = await _scanFile(bottomFile.path);
-        if (bottomResult != null) return bottomResult;
-
-        // Desna polovina / donja desna regija (Yettel, A1, MTS)
-        final rightRegion = img.copyCrop(
-          oriented,
-          x: (w * 0.35).toInt(),
-          y: (h * 0.35).toInt(),
-          width: (w * 0.65).toInt(),
-          height: (h * 0.65).toInt(),
-        );
-        final rightFile = File('${dir.path}/ips_qr_crop_right_$stamp.jpg');
-        await rightFile.writeAsBytes(
-          img.encodeJpg(rightRegion, quality: 90),
-          flush: true,
-        );
-        fallbackFiles.add(rightFile);
-
-        final rightResult = await _scanFile(rightFile.path);
-        if (rightResult != null) return rightResult;
-      }
-
       return null;
     } catch (e) {
       debugPrint('QrScannerService fallback scanning error: $e');
@@ -148,6 +83,53 @@ class QrScannerService {
         } catch (_) {}
       }
     }
+  }
+
+  /// Seče sliku na mrežu 2×3 isečaka sa preklapanjem (QR na granici ostaje
+  /// ceo bar u jednom isečku), donji red prvi jer je tu uplatnica. Mali isečci
+  /// se uvećavaju 2× (nearest — ivice modula ostaju oštre); vrlo velike
+  /// fotografije se prvo smanjuju da isečci ne bi bili preveliki za ML Kit.
+  static List<Uint8List> _buildTiles(Uint8List bytes) {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return const [];
+    var oriented = img.bakeOrientation(decoded);
+
+    final maxDim = math.max(oriented.width, oriented.height);
+    if (maxDim > 4000) {
+      final factor = 4000 / maxDim;
+      oriented = img.copyResize(
+        oriented,
+        width: (oriented.width * factor).round(),
+        height: (oriented.height * factor).round(),
+        interpolation: img.Interpolation.average,
+      );
+    }
+
+    final w = oriented.width;
+    final h = oriented.height;
+    if (w < 200 || h < 200) return const [];
+
+    final tileW = (w * 0.6).round();
+    final tileH = (h * 0.45).round();
+    final xs = [0, w - tileW];
+    final ys = [h - tileH, ((h - tileH) / 2).round(), 0];
+
+    final tiles = <Uint8List>[];
+    for (final y in ys) {
+      for (final x in xs) {
+        var tile = img.copyCrop(oriented, x: x, y: y, width: tileW, height: tileH);
+        if (math.max(tile.width, tile.height) < 1500) {
+          tile = img.copyResize(
+            tile,
+            width: tile.width * 2,
+            height: tile.height * 2,
+            interpolation: img.Interpolation.nearest,
+          );
+        }
+        tiles.add(img.encodeJpg(tile, quality: 92));
+      }
+    }
+    return tiles;
   }
 
   Future<InvoiceData?> _scanFile(String path) async {

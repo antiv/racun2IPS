@@ -307,18 +307,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   /// PDF: stranice se renderuju u slike (native PdfRenderer / PDFKit) i
-  /// prolaze isti QR → OCR tok kao fotografija. Ako lokalno ne uspe, Gemini-ju
-  /// se šalje originalni PDF (podržava application/pdf), ne samo jedna stranica.
+  /// prolaze isti QR → OCR tok kao fotografija, uz tekstualni sloj PDF-a
+  /// između ta dva koraka. Ako lokalno ne uspe, Gemini-ju se šalje originalni
+  /// PDF (podržava application/pdf), ne samo jedna stranica.
   Future<void> _processPdf(Uint8List pdfBytes) {
     return _runExtraction(() async {
       final pages = await renderPdfPages(pdfBytes);
+      final texts = await extractPdfText(pdfBytes);
       if (pages.isEmpty) {
-        // Renderovanje nije uspelo (npr. zaštićen PDF) — probaj direktno AI.
+        // Renderovanje nije uspelo (npr. zaštićen PDF) — tekst, pa AI.
+        for (final text in texts) {
+          final textData = tryParseInvoiceText(text);
+          if (textData != null) return (textData, ExtractionSource.text, null);
+        }
         final aiData = await processInvoice(pdfBytes);
         return (aiData, ExtractionSource.ai, null);
       }
       return _extractFromImages(
         pages,
+        pdfTexts: texts,
         aiFallback: () => processInvoice(pdfBytes),
       );
     });
@@ -391,13 +398,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Trostepena ekstrakcija nad jednom ili više slika (stranica):
-  /// 1. Lokalni QR skener na svim stranicama (postojeći NBS IPS QR kod),
-  /// 2. Lokalni OCR na uređaju + Modulo-97 validacija,
-  /// 3. [aiFallback] (Gemini) ako lokalne metode ne izvuku potpune podatke.
+  /// Ekstrakcija nad jednom ili više slika (stranica):
+  /// 1. Brzi lokalni QR skener na svim stranicama (postojeći NBS IPS QR kod),
+  /// 2. Tekstualni sloj PDF-a ([pdfTexts], tačan tekst i na ćirilici),
+  /// 3. Lokalni OCR na uređaju + Modulo-97 validacija (samo latinica),
+  /// 4. QR skener nad isečcima stranica (sitan QR; sporo, pa tek ovde),
+  /// 5. [aiFallback] (Gemini) ako lokalne metode ne izvuku potpune podatke.
   /// Vraća i sliku stranice na kojoj su podaci nađeni, za "Pogledaj račun".
   Future<(InvoiceData, ExtractionSource, Uint8List?)> _extractFromImages(
     List<Uint8List> images, {
+    List<String> pdfTexts = const [],
     required Future<InvoiceData> Function() aiFallback,
   }) async {
     final tempFiles = <File>[];
@@ -419,16 +429,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Korak 1: Postojeći NBS IPS QR kod (<100ms, 100% tačnost)
       for (var i = 0; i < tempFiles.length; i++) {
-        final qrData =
-            await _qrScannerService.tryExtractIpsFromFile(tempFiles[i].path);
+        final qrData = await _qrScannerService.tryExtractIpsFromFile(
+          tempFiles[i].path,
+          deep: false,
+        );
         if (qrData != null) return (qrData, ExtractionSource.qr, images[i]);
       }
 
-      // Korak 2: Lokalni OCR sa Modulo-97 proverom
+      // Korak 2: Tekstualni sloj PDF-a (stranice su u istom redosledu kao slike)
+      for (var i = 0; i < pdfTexts.length; i++) {
+        final textData = tryParseInvoiceText(pdfTexts[i]);
+        if (textData != null) {
+          return (
+            textData,
+            ExtractionSource.text,
+            i < images.length ? images[i] : images.first,
+          );
+        }
+      }
+
+      // Korak 3: Lokalni OCR sa Modulo-97 proverom
       for (var i = 0; i < tempFiles.length; i++) {
         final ocrData =
             await _localOcrService.tryExtractFromFile(tempFiles[i].path);
         if (ocrData != null) return (ocrData, ExtractionSource.ocr, images[i]);
+      }
+
+      // Korak 4: QR nad isečcima (npr. ćirilična fotografija sa sitnim QR kodom)
+      for (var i = 0; i < tempFiles.length; i++) {
+        final qrData =
+            await _qrScannerService.tryExtractIpsFromTiles(tempFiles[i].path);
+        if (qrData != null) return (qrData, ExtractionSource.qr, images[i]);
       }
     } catch (e) {
       debugPrint('Local extraction skipped: $e');
@@ -440,7 +471,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    // Korak 3: Fallback na Gemini AI
+    // Korak 5: Fallback na Gemini AI
     final aiData = await aiFallback();
     return (aiData, ExtractionSource.ai, images.first);
   }
