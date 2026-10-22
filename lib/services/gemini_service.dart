@@ -51,7 +51,7 @@ Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
       'inlineData': {
         'mimeType': _detectMimeType(imageBytes),
         'data': base64Encode(imageBytes),
-      }
+      },
     },
   ]);
 }
@@ -70,8 +70,8 @@ Future<InvoiceData> _callGemini(List<Map<String, dynamic>> parts) async {
     final keyName = Platform.isAndroid
         ? 'GEMINI_API_KEY_ANDROID (ili GEMINI_API_KEY)'
         : Platform.isIOS
-            ? 'GEMINI_API_KEY_IOS (ili GEMINI_API_KEY)'
-            : 'GEMINI_API_KEY';
+        ? 'GEMINI_API_KEY_IOS (ili GEMINI_API_KEY)'
+        : 'GEMINI_API_KEY';
     throw Exception('Gemini API ključ nedostaje ($keyName).');
   }
 
@@ -83,8 +83,9 @@ Future<InvoiceData> _callGemini(List<Map<String, dynamic>> parts) async {
     headers['X-Android-Package'] = _appPackageName;
     if (_cachedAndroidCertSha1 == null) {
       try {
-        _cachedAndroidCertSha1 =
-            await _channel.invokeMethod<String>('getAppSignatureSha1');
+        _cachedAndroidCertSha1 = await _channel.invokeMethod<String>(
+          'getAppSignatureSha1',
+        );
       } catch (_) {}
     }
     final certSha1 =
@@ -111,7 +112,7 @@ Future<InvoiceData> _callGemini(List<Map<String, dynamic>> parts) async {
       options: Options(headers: headers),
       data: {
         'contents': [
-          {'parts': parts}
+          {'parts': parts},
         ],
         'generationConfig': {
           'responseMimeType': 'application/json',
@@ -148,8 +149,10 @@ Future<InvoiceData> _callGemini(List<Map<String, dynamic>> parts) async {
     rethrow;
   }
 
-  final text = (((response.data?['candidates'] as List?)?.firstOrNull
-              as Map<String, dynamic>?)?['content']?['parts'] as List?)
+  final text =
+      (((response.data?['candidates'] as List?)?.firstOrNull
+                  as Map<String, dynamic>?)?['content']?['parts']
+              as List?)
           ?.map((p) => (p as Map<String, dynamic>)['text'] as String? ?? '')
           .join() ??
       '';

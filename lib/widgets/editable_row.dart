@@ -31,8 +31,9 @@ class EditableRow extends StatefulWidget {
 }
 
 class _EditableRowState extends State<EditableRow> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.value);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.value,
+  );
 
   @override
   void didUpdateWidget(EditableRow oldWidget) {
@@ -82,8 +83,8 @@ class _EditableRowState extends State<EditableRow> {
                     color: isOverLimit
                         ? AppColors.red400
                         : widget.value.length > maxLength * 0.8
-                            ? AppColors.amber400
-                            : AppColors.stone300,
+                        ? AppColors.amber400
+                        : AppColors.stone300,
                   ),
                 ),
             ],
@@ -103,8 +104,9 @@ class _EditableRowState extends State<EditableRow> {
             style: TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.w500,
-              fontFeatures:
-                  widget.isMono ? const [FontFeature.tabularFigures()] : null,
+              fontFeatures: widget.isMono
+                  ? const [FontFeature.tabularFigures()]
+                  : null,
               color: hasError ? AppColors.red600 : AppColors.stone900,
             ),
           ),

@@ -197,7 +197,11 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(LucideIcons.camera, size: 22, color: AppColors.emerald600),
+              leading: const Icon(
+                LucideIcons.camera,
+                size: 22,
+                color: AppColors.emerald600,
+              ),
               title: Text(t.addViaCamera),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
@@ -206,7 +210,11 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(LucideIcons.image, size: 22, color: AppColors.emerald600),
+              leading: const Icon(
+                LucideIcons.image,
+                size: 22,
+                color: AppColors.emerald600,
+              ),
               title: Text(t.addViaGallery),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
@@ -215,7 +223,11 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(LucideIcons.penLine, size: 22, color: AppColors.emerald600),
+              leading: const Icon(
+                LucideIcons.penLine,
+                size: 22,
+                color: AppColors.emerald600,
+              ),
               title: Text(t.addViaManual),
               onTap: () {
                 Navigator.of(sheetCtx).pop();
@@ -264,7 +276,11 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, size: 22, color: AppColors.stone800),
+          icon: const Icon(
+            LucideIcons.arrowLeft,
+            size: 22,
+            color: AppColors.stone800,
+          ),
           tooltip: t.back,
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -272,12 +288,20 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
           IconButton(
             onPressed: widget.onExport,
             tooltip: t.exportCodes,
-            icon: const Icon(LucideIcons.upload, size: 20, color: AppColors.stone600),
+            icon: const Icon(
+              LucideIcons.upload,
+              size: 20,
+              color: AppColors.stone600,
+            ),
           ),
           IconButton(
             onPressed: widget.onImport,
             tooltip: t.importCodes,
-            icon: const Icon(LucideIcons.download, size: 20, color: AppColors.stone600),
+            icon: const Icon(
+              LucideIcons.download,
+              size: 20,
+              color: AppColors.stone600,
+            ),
           ),
           const SizedBox(width: 4),
         ],
@@ -323,12 +347,18 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
                         isDense: true,
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
-                        prefixIcon: const Icon(LucideIcons.search,
-                            size: 18, color: AppColors.stone500),
+                        prefixIcon: const Icon(
+                          LucideIcons.search,
+                          size: 18,
+                          color: AppColors.stone500,
+                        ),
                         suffixIcon: _query.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(LucideIcons.x,
-                                    size: 18, color: AppColors.stone400),
+                                icon: const Icon(
+                                  LucideIcons.x,
+                                  size: 18,
+                                  color: AppColors.stone400,
+                                ),
                                 onPressed: () {
                                   _searchController.clear();
                                   setState(() => _query = '');
@@ -341,7 +371,10 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
                           color: AppColors.stone400,
                         ),
                       ),
-                      style: const TextStyle(fontSize: 14, color: AppColors.stone800),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.stone800,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -381,36 +414,36 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
                       desc: t.noSavedCodesDesc,
                     )
                   : filtered.isEmpty
-                      ? _EmptyState(title: t.noSearchResults, desc: null)
-                      : ListView(
-                          physics: const BouncingScrollPhysics(),
-                          // Donji prostor da FAB ne prekrije poslednji red.
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                          children: [
-                            if (showGroups) _GroupLabel(t.pinnedSection),
-                            for (final code in pinned)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _PinnedCard(
-                                  t: t,
-                                  code: code,
-                                  onShowQr: () => _showQuickSheet(code),
-                                  onTogglePaid: () => _togglePaid(code),
-                                  onDismissed: () => widget.onDelete(code.id),
-                                  confirmDismiss: () => _confirmDelete(context),
-                                ),
-                              ),
-                            if (showGroups) _GroupLabel(t.otherSection),
-                            if (others.isNotEmpty)
-                              _GroupedCard(
-                                t: t,
-                                codes: others,
-                                onTap: _showQuickSheet,
-                                onDismissed: (code) => widget.onDelete(code.id),
-                                confirmDismiss: () => _confirmDelete(context),
-                              ),
-                          ],
-                        ),
+                  ? _EmptyState(title: t.noSearchResults, desc: null)
+                  : ListView(
+                      physics: const BouncingScrollPhysics(),
+                      // Donji prostor da FAB ne prekrije poslednji red.
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      children: [
+                        if (showGroups) _GroupLabel(t.pinnedSection),
+                        for (final code in pinned)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _PinnedCard(
+                              t: t,
+                              code: code,
+                              onShowQr: () => _showQuickSheet(code),
+                              onTogglePaid: () => _togglePaid(code),
+                              onDismissed: () => widget.onDelete(code.id),
+                              confirmDismiss: () => _confirmDelete(context),
+                            ),
+                          ),
+                        if (showGroups) _GroupLabel(t.otherSection),
+                        if (others.isNotEmpty)
+                          _GroupedCard(
+                            t: t,
+                            codes: others,
+                            onTap: _showQuickSheet,
+                            onDismissed: (code) => widget.onDelete(code.id),
+                            confirmDismiss: () => _confirmDelete(context),
+                          ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -424,7 +457,9 @@ class _SavedCodesScreenState extends State<SavedCodesScreen> {
           elevation: 3,
           highlightElevation: 5,
           extendedPadding: const EdgeInsets.only(left: 18, right: 22),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
           icon: const Icon(LucideIcons.plus, size: 20),
           label: Text(
             t.add,
@@ -534,7 +569,11 @@ class _EmptyState extends StatelessWidget {
                 color: AppColors.stone100,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(LucideIcons.qrCode, size: 30, color: AppColors.stone400),
+              child: const Icon(
+                LucideIcons.qrCode,
+                size: 30,
+                color: AppColors.stone400,
+              ),
             ),
             const SizedBox(height: 14),
             Text(
@@ -563,14 +602,14 @@ class _EmptyState extends StatelessWidget {
 
 /// Crvena pozadina za brisanje prevlačenjem.
 Widget _dismissBackground(double radius) => Container(
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 20),
-      decoration: BoxDecoration(
-        color: AppColors.red50,
-        borderRadius: BorderRadius.circular(radius),
-      ),
-      child: const Icon(LucideIcons.trash2, size: 20, color: AppColors.red600),
-    );
+  alignment: Alignment.centerRight,
+  padding: const EdgeInsets.only(right: 20),
+  decoration: BoxDecoration(
+    color: AppColors.red50,
+    borderRadius: BorderRadius.circular(radius),
+  ),
+  child: const Icon(LucideIcons.trash2, size: 20, color: AppColors.red600),
+);
 
 /// Prikačen kod: istaknuta kartica sa iznosom i brzim akcijama.
 class _PinnedCard extends StatelessWidget {
@@ -657,7 +696,9 @@ class _PinnedCard extends StatelessWidget {
                   Expanded(
                     child: _CardButton(
                       onTap: onTogglePaid,
-                      icon: isPaid ? LucideIcons.circleCheck : LucideIcons.check,
+                      icon: isPaid
+                          ? LucideIcons.circleCheck
+                          : LucideIcons.check,
                       label: isPaid ? t.paidBadge : t.markPaidShort,
                       highlighted: isPaid,
                     ),
@@ -704,7 +745,9 @@ class _CardButton extends StatelessWidget {
         ),
       ],
     );
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    );
     return SizedBox(
       height: 40,
       child: primary
@@ -722,11 +765,16 @@ class _CardButton extends StatelessWidget {
           : OutlinedButton(
               onPressed: onTap,
               style: OutlinedButton.styleFrom(
-                backgroundColor: highlighted ? AppColors.emerald50 : Colors.white,
-                foregroundColor:
-                    highlighted ? AppColors.emerald700 : AppColors.stone700,
+                backgroundColor: highlighted
+                    ? AppColors.emerald50
+                    : Colors.white,
+                foregroundColor: highlighted
+                    ? AppColors.emerald700
+                    : AppColors.stone700,
                 side: BorderSide(
-                  color: highlighted ? AppColors.emerald200 : AppColors.stone200,
+                  color: highlighted
+                      ? AppColors.emerald200
+                      : AppColors.stone200,
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 shape: shape,
@@ -781,7 +829,10 @@ class _GroupedCard extends StatelessWidget {
                     t: t,
                     code: codes[i],
                     subtitle: _subtitle(codes[i]),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     trailing: const Icon(
                       LucideIcons.chevronRight,
                       size: 18,
@@ -798,10 +849,10 @@ class _GroupedCard extends StatelessWidget {
   }
 
   String _subtitle(SavedCode code) {
-    final recipient = code.title.isNotEmpty && code.data.recipientName.isNotEmpty
+    final recipient =
+        code.title.isNotEmpty && code.data.recipientName.isNotEmpty
         ? code.data.recipientName
         : SavedCodeTile.maskedAccount(code);
     return '$recipient · ${SavedCodeTile.amountLabel(code, t)}';
   }
 }
-

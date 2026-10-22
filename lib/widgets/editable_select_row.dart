@@ -23,8 +23,9 @@ class EditableSelectRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = paymentCodes.where((c) => c.code == value).firstOrNull;
-    final displayLabel =
-        selected != null ? '${selected.code} - ${selected.description}' : value;
+    final displayLabel = selected != null
+        ? '${selected.code} - ${selected.description}'
+        : value;
 
     return InkWell(
       onTap: () => _showPicker(context),
@@ -59,8 +60,11 @@ class EditableSelectRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(LucideIcons.chevronDown,
-                size: 18, color: AppColors.stone400),
+            const Icon(
+              LucideIcons.chevronDown,
+              size: 18,
+              color: AppColors.stone400,
+            ),
           ],
         ),
       ),
@@ -108,8 +112,9 @@ class EditableSelectRow extends StatelessWidget {
                     '${item.code} - ${item.description}',
                     style: TextStyle(
                       fontSize: 13.5,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w400,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w400,
                       color: isSelected
                           ? AppColors.emerald700
                           : AppColors.stone600,

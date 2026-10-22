@@ -34,7 +34,11 @@ class ErrorView extends StatelessWidget {
                 color: AppColors.red50,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(LucideIcons.circleAlert, size: 40, color: AppColors.red500),
+              child: const Icon(
+                LucideIcons.circleAlert,
+                size: 40,
+                color: AppColors.red500,
+              ),
             ),
             const SizedBox(height: 22),
             Text(
@@ -63,7 +67,9 @@ class ErrorView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   textStyle: const TextStyle(
-                  fontFamily: kFontFamily,fontWeight: FontWeight.w600),
+                    fontFamily: kFontFamily,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 child: Text(t.tryAgain),
               ),

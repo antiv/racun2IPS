@@ -56,7 +56,9 @@ class Invoice2IpsApp extends StatelessWidget {
         dialogTheme: DialogThemeData(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
         ),
       ),
       home: const HomeScreen(),

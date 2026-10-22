@@ -299,10 +299,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _processInvoice(Uint8List imageBytes) {
     return _runExtraction(
-      () => _extractFromImages(
-        [imageBytes],
-        aiFallback: () => processInvoice(imageBytes),
-      ),
+      () => _extractFromImages([
+        imageBytes,
+      ], aiFallback: () => processInvoice(imageBytes)),
     );
   }
 
@@ -336,8 +335,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _processText(String text) {
     setState(() => _image = null);
     return _runExtraction(() async {
-      final ipsMatch = RegExp(r'K:(?:PR|EK)\|[^\r\n]+', caseSensitive: false)
-          .firstMatch(text);
+      final ipsMatch = RegExp(
+        r'K:(?:PR|EK)\|[^\r\n]+',
+        caseSensitive: false,
+      ).firstMatch(text);
       if (ipsMatch != null) {
         final ipsData = parseIpsString(ipsMatch.group(0)!);
         if (ipsData != null && validateAccountNumber(ipsData.accountNumber)) {
@@ -350,7 +351,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Tekst bez ijednog broja (npr. podeljen link ili obična poruka) ne može
       // sadržati račun — ne troši AI poziv.
       if (!RegExp(r'\d{3,}').hasMatch(text)) {
-        throw Exception('ValidationFailed: tekst ne sadrži podatke za plaćanje');
+        throw Exception(
+          'ValidationFailed: tekst ne sadrži podatke za plaćanje',
+        );
       }
       final aiData = await processInvoiceText(text);
       return (aiData, ExtractionSource.ai, null);
@@ -416,7 +419,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final stamp = DateTime.now().microsecondsSinceEpoch;
       for (var i = 0; i < images.length; i++) {
         final bytes = images[i];
-        final isPng = bytes.length >= 8 &&
+        final isPng =
+            bytes.length >= 8 &&
             bytes[0] == 0x89 &&
             bytes[1] == 0x50 &&
             bytes[2] == 0x4E &&
@@ -450,15 +454,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Korak 3: Lokalni OCR sa Modulo-97 proverom
       for (var i = 0; i < tempFiles.length; i++) {
-        final ocrData =
-            await _localOcrService.tryExtractFromFile(tempFiles[i].path);
+        final ocrData = await _localOcrService.tryExtractFromFile(
+          tempFiles[i].path,
+        );
         if (ocrData != null) return (ocrData, ExtractionSource.ocr, images[i]);
       }
 
       // Korak 4: QR nad isečcima (npr. ćirilična fotografija sa sitnim QR kodom)
       for (var i = 0; i < tempFiles.length; i++) {
-        final qrData =
-            await _qrScannerService.tryExtractIpsFromTiles(tempFiles[i].path);
+        final qrData = await _qrScannerService.tryExtractIpsFromTiles(
+          tempFiles[i].path,
+        );
         if (qrData != null) return (qrData, ExtractionSource.qr, images[i]);
       }
     } catch (e) {
@@ -502,7 +508,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final data = _invoiceData;
     if (data == null) return;
     await share_utils.shareQrCode(
-      generateIpsString(data, allowOpenAmount: _resultMode == ResultMode.ownCode),
+      generateIpsString(
+        data,
+        allowOpenAmount: _resultMode == ResultMode.ownCode,
+      ),
       _t.title,
       _t.shareDesc,
     );
@@ -629,13 +638,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (data == null) return;
     final editingId = _editingSavedId;
     if (editingId == null) {
-      await _savedCodesService.add(SavedCode(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        createdAt: DateTime.now(),
-        title: _editingTitle,
-        kind: SavedCodeKind.ownAccount,
-        data: data.copyWith(),
-      ));
+      await _savedCodesService.add(
+        SavedCode(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          createdAt: DateTime.now(),
+          title: _editingTitle,
+          kind: SavedCodeKind.ownAccount,
+          data: data.copyWith(),
+        ),
+      );
     } else {
       await _savedCodesService.update(
         editingId,
@@ -672,7 +683,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.emerald600),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.emerald600,
+              ),
               child: Text(_t.updateExisting),
             ),
           ],
@@ -687,13 +700,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    await _savedCodesService.add(SavedCode(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      createdAt: DateTime.now(),
-      kind: SavedCodeKind.billTemplate,
-      title: _editingTitle.isNotEmpty ? _editingTitle : data.recipientName,
-      data: data.copyWith(),
-    ));
+    await _savedCodesService.add(
+      SavedCode(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        createdAt: DateTime.now(),
+        kind: SavedCodeKind.billTemplate,
+        title: _editingTitle.isNotEmpty ? _editingTitle : data.recipientName,
+        data: data.copyWith(),
+      ),
+    );
     await _loadSavedCodes();
     if (!mounted) return;
     _showToast(_t.savedToast);
@@ -705,7 +720,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final json = await _savedCodesService.exportJson();
     if (!mounted) return;
     final now = DateTime.now();
-    final stamp = '${now.year}'
+    final stamp =
+        '${now.year}'
         '${now.month.toString().padLeft(2, '0')}'
         '${now.day.toString().padLeft(2, '0')}';
     await share_utils.shareJsonBackup(
@@ -811,105 +827,105 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Scaffold(
         backgroundColor: AppColors.stone50,
         body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 448),
-            child: Container(
-              color: AppColors.stone50,
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      // Header — sakriven tokom kamere (full-bleed prikaz)
-                      if (_state != AppState.capturing) _buildHeader(t),
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 360),
-                          switchInCurve: const Cubic(0.22, 1, 0.36, 1),
-                          switchOutCurve: Curves.easeOut,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 0.015),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              ),
-                          child: _buildBody(t),
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Toast za kopiranje/čuvanje
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 24,
-                    child: IgnorePointer(
-                      child: AnimatedSlide(
-                        offset: toastMessage != null
-                            ? Offset.zero
-                            : const Offset(0, 0.4),
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOut,
-                        child: AnimatedOpacity(
-                          opacity: toastMessage != null ? 1 : 0,
-                          duration: const Duration(milliseconds: 250),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 16,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.stone900,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black45,
-                                  blurRadius: 24,
-                                  offset: Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  LucideIcons.circleCheck,
-                                  size: 18,
-                                  color: AppColors.emerald400,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    toastMessage ?? '',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 448),
+              child: Container(
+                color: AppColors.stone50,
+                child: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        // Header — sakriven tokom kamere (full-bleed prikaz)
+                        if (_state != AppState.capturing) _buildHeader(t),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 360),
+                            switchInCurve: const Cubic(0.22, 1, 0.36, 1),
+                            switchOutCurve: Curves.easeOut,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0, 0.015),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
                                   ),
                                 ),
-                              ],
+                            child: _buildBody(t),
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Toast za kopiranje/čuvanje
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 24,
+                      child: IgnorePointer(
+                        child: AnimatedSlide(
+                          offset: toastMessage != null
+                              ? Offset.zero
+                              : const Offset(0, 0.4),
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOut,
+                          child: AnimatedOpacity(
+                            opacity: toastMessage != null ? 1 : 0,
+                            duration: const Duration(milliseconds: 250),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.stone900,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black45,
+                                    blurRadius: 24,
+                                    offset: Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    LucideIcons.circleCheck,
+                                    size: 18,
+                                    color: AppColors.emerald400,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      toastMessage ?? '',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildHeader(Translations t) {
     final topInset = MediaQuery.of(context).padding.top;
@@ -950,7 +966,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 color: AppColors.emerald600,
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: const Icon(LucideIcons.qrCode, size: 18, color: Colors.white),
+              child: const Icon(
+                LucideIcons.qrCode,
+                size: 18,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 10),
             const Expanded(child: wordmark),
@@ -969,8 +989,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final title = !isResult
         ? null
         : _resultMode == ResultMode.ownCode
-            ? t.ownCodeBannerTitle
-            : t.resultReady;
+        ? t.ownCodeBannerTitle
+        : t.resultReady;
     return Padding(
       padding: EdgeInsets.fromLTRB(8, topInset + 10, 16, 6),
       child: Row(
@@ -1012,7 +1032,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              icon: const Icon(LucideIcons.image, size: 15, color: AppColors.stone600),
+              icon: const Icon(
+                LucideIcons.image,
+                size: 15,
+                color: AppColors.stone600,
+              ),
               label: Text(t.viewInvoice),
             ),
         ],
@@ -1155,8 +1179,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           onTitleChanged: (val) => setState(() => _editingTitle = val),
           onSave: _resultMode == ResultMode.ownCode ? _saveCurrentCode : null,
           onDelete: _editingSavedId != null ? _deleteCurrentAndReturn : null,
-          onSaveScanned:
-              _resultMode == ResultMode.payInvoice ? _saveScannedInvoice : null,
+          onSaveScanned: _resultMode == ResultMode.payInvoice
+              ? _saveScannedInvoice
+              : null,
           onChanged: () => setState(() {}),
           onCopy: _handleCopy,
           onShare: _handleShare,

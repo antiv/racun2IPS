@@ -43,9 +43,11 @@ void main() {
       ),
     };
     final out = {
-      for (final e in codes.entries) e.key: _svgPath(generateIpsString(e.value)),
+      for (final e in codes.entries)
+        e.key: _svgPath(generateIpsString(e.value)),
     };
-    File('marketing/screenshots/design/qr.json')
-        .writeAsStringSync(const JsonEncoder.withIndent('  ').convert(out));
+    File(
+      'marketing/screenshots/design/qr.json',
+    ).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(out));
   });
 }

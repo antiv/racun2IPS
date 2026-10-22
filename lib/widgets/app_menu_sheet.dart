@@ -71,10 +71,7 @@ class _AppMenu extends StatefulWidget {
 class _AppMenuState extends State<_AppMenu> {
   late Language _lang = widget.language;
 
-  static const _languageNames = {
-    Language.sr: 'Srpski',
-    Language.en: 'English',
-  };
+  static const _languageNames = {Language.sr: 'Srpski', Language.en: 'English'};
 
   @override
   Widget build(BuildContext context) {
@@ -149,19 +146,31 @@ class _AppMenuState extends State<_AppMenu> {
                     label: t.infoTitle,
                     onTap: () => widget.onAction(widget.onInfo),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AppColors.stone100,
+                  ),
                   _MenuRow(
                     icon: LucideIcons.upload,
                     label: t.exportCodes,
                     onTap: () => widget.onAction(widget.onExport),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AppColors.stone100,
+                  ),
                   _MenuRow(
                     icon: LucideIcons.download,
                     label: t.importCodes,
                     onTap: () => widget.onAction(widget.onImport),
                   ),
-                  const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AppColors.stone100,
+                  ),
                   _MenuRow(
                     icon: LucideIcons.star,
                     label: t.reviewRate,
@@ -174,7 +183,9 @@ class _AppMenuState extends State<_AppMenu> {
             FutureBuilder<PackageInfo>(
               future: PackageInfo.fromPlatform(),
               builder: (context, snapshot) => Text(
-                snapshot.hasData ? '${t.version} ${snapshot.data!.version}' : '',
+                snapshot.hasData
+                    ? '${t.version} ${snapshot.data!.version}'
+                    : '',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 12, color: AppColors.stone500),
               ),
@@ -269,7 +280,11 @@ class _MenuRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const Icon(LucideIcons.chevronRight, size: 18, color: AppColors.stone400),
+              const Icon(
+                LucideIcons.chevronRight,
+                size: 18,
+                color: AppColors.stone400,
+              ),
             ],
           ),
         ),

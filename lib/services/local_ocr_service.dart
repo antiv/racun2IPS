@@ -123,7 +123,9 @@ class LocalOcrService {
       // 1. Pokušaj parsiranja nad prirodnim redosledom blokova iz ML Kit-a.
       final direct = tryParseInvoiceText(recognized.text);
       if (direct != null) {
-        debugPrint('LocalOcrService: uspešno parsirano direktno iz blokova teksta');
+        debugPrint(
+          'LocalOcrService: uspešno parsirano direktno iz blokova teksta',
+        );
         return direct;
       }
 

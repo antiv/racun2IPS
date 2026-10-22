@@ -10,11 +10,7 @@ const _channel = MethodChannel('rs.antonijevic.invoice2ips/shared');
 enum SharedPayloadType { image, pdf, text }
 
 class SharedPayload {
-  const SharedPayload({
-    required this.type,
-    this.bytes,
-    this.text,
-  });
+  const SharedPayload({required this.type, this.bytes, this.text});
 
   final SharedPayloadType type;
   final Uint8List? bytes;
@@ -37,19 +33,25 @@ Future<SharedPayload?> getSharedPayload() async {
     switch (typeStr) {
       case 'image':
         if (bytes != null && bytes.isNotEmpty) {
-          debugPrint('getSharedPayload: primljena slika (${bytes.length} bajtova)');
+          debugPrint(
+            'getSharedPayload: primljena slika (${bytes.length} bajtova)',
+          );
           return SharedPayload(type: SharedPayloadType.image, bytes: bytes);
         }
         return null;
       case 'pdf':
         if (bytes != null && bytes.isNotEmpty) {
-          debugPrint('getSharedPayload: primljen PDF (${bytes.length} bajtova)');
+          debugPrint(
+            'getSharedPayload: primljen PDF (${bytes.length} bajtova)',
+          );
           return SharedPayload(type: SharedPayloadType.pdf, bytes: bytes);
         }
         return null;
       case 'text':
         if (text != null && text.trim().isNotEmpty) {
-          debugPrint('getSharedPayload: primljen tekst (${text.length} karaktera)');
+          debugPrint(
+            'getSharedPayload: primljen tekst (${text.length} karaktera)',
+          );
           return SharedPayload(type: SharedPayloadType.text, text: text);
         }
         return null;
@@ -66,10 +68,9 @@ Future<SharedPayload?> getSharedPayload() async {
 /// koristeći ugrađeni Android PdfRenderer odnosno iOS PDFKit.
 Future<List<Uint8List>> renderPdfPages(Uint8List pdfBytes) async {
   try {
-    final result = await _channel.invokeMethod<dynamic>(
-      'renderPdfPages',
-      {'bytes': pdfBytes},
-    );
+    final result = await _channel.invokeMethod<dynamic>('renderPdfPages', {
+      'bytes': pdfBytes,
+    });
     if (result is! List) return const [];
     final pages = <Uint8List>[];
     for (final item in result) {
@@ -91,10 +92,9 @@ Future<List<Uint8List>> renderPdfPages(Uint8List pdfBytes) async {
 /// (prazan string za stranicu bez teksta, npr. skeniran PDF).
 Future<List<String>> extractPdfText(Uint8List pdfBytes) async {
   try {
-    final result = await _channel.invokeMethod<dynamic>(
-      'extractPdfText',
-      {'bytes': pdfBytes},
-    );
+    final result = await _channel.invokeMethod<dynamic>('extractPdfText', {
+      'bytes': pdfBytes,
+    });
     if (result is! List) return const [];
     return result.map((e) => e?.toString() ?? '').toList();
   } catch (e) {

@@ -80,7 +80,9 @@ Future<bool?> showReviewSheet(BuildContext context, Translations t) {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   textStyle: const TextStyle(
-                  fontFamily: kFontFamily,fontWeight: FontWeight.w700),
+                    fontFamily: kFontFamily,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 child: Text(t.reviewRate),
               ),
@@ -97,7 +99,9 @@ Future<bool?> showReviewSheet(BuildContext context, Translations t) {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   textStyle: const TextStyle(
-                  fontFamily: kFontFamily,fontWeight: FontWeight.w600),
+                    fontFamily: kFontFamily,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 child: Text(t.reviewLater),
               ),

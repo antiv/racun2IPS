@@ -62,19 +62,23 @@ class ResultView extends StatelessWidget {
     final isOwnCode = mode == ResultMode.ownCode;
     final isAccountValid = validateAccountNumber(data.accountNumber);
     final isAmountValid = isOwnCode ? data.amount >= 0 : data.amount > 0;
-    final isRecipientValid = data.recipientName.trim().isNotEmpty &&
+    final isRecipientValid =
+        data.recipientName.trim().isNotEmpty &&
         data.recipientName.length <= IpsLimits.n;
-    final isPurposeValid = data.purpose.isEmpty || data.purpose.length <= IpsLimits.s;
+    final isPurposeValid =
+        data.purpose.isEmpty || data.purpose.length <= IpsLimits.s;
     final isReferenceValid = validateReferenceNumber(data.referenceNumber);
-    final isSfValid = RegExp(r'^\d{3}$')
-        .hasMatch(data.paymentCode.isEmpty ? '289' : data.paymentCode);
+    final isSfValid = RegExp(
+      r'^\d{3}$',
+    ).hasMatch(data.paymentCode.isEmpty ? '289' : data.paymentCode);
     final hasPipe = [
       data.recipientName,
       data.purpose,
       data.referenceNumber,
       data.paymentCode,
     ].any((v) => v.contains('|'));
-    final isFormValid = isAccountValid &&
+    final isFormValid =
+        isAccountValid &&
         isAmountValid &&
         isRecipientValid &&
         isPurposeValid &&
@@ -165,7 +169,9 @@ class ResultView extends StatelessWidget {
                               ),
                             const SizedBox(height: 2),
                             Text(
-                              isOwnCode ? t.ownCodeInstruction : t.scanInstruction,
+                              isOwnCode
+                                  ? t.ownCodeInstruction
+                                  : t.scanInstruction,
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontSize: 13,
@@ -244,7 +250,10 @@ class ResultView extends StatelessWidget {
                     ),
                     if (sourceLabel != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.emerald50,
                           borderRadius: BorderRadius.circular(999),
@@ -282,7 +291,8 @@ class ResultView extends StatelessWidget {
                       label: t.recipient,
                       value: data.recipientName,
                       maxLength: IpsLimits.n,
-                      error: !isRecipientValid || data.recipientName.contains('|'),
+                      error:
+                          !isRecipientValid || data.recipientName.contains('|'),
                       onChanged: (val) {
                         data.recipientName = val;
                         onChanged();
@@ -324,7 +334,9 @@ class ResultView extends StatelessWidget {
                     const _RowDivider(),
                     EditableSelectRow(
                       label: t.paymentCode,
-                      value: data.paymentCode.isEmpty ? '289' : data.paymentCode,
+                      value: data.paymentCode.isEmpty
+                          ? '289'
+                          : data.paymentCode,
                       error: !isSfValid || data.paymentCode.contains('|'),
                       onChanged: (val) {
                         data.paymentCode = val;
@@ -348,7 +360,9 @@ class ResultView extends StatelessWidget {
                       value: data.referenceNumber,
                       maxLength: IpsLimits.ro,
                       isMono: true,
-                      error: !isReferenceValid || data.referenceNumber.contains('|'),
+                      error:
+                          !isReferenceValid ||
+                          data.referenceNumber.contains('|'),
                       onChanged: (val) {
                         data.referenceNumber = val;
                         onChanged();
@@ -437,9 +451,21 @@ class _BottomButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bg, fg, border) = switch (style) {
-      _BottomStyle.outline => (Colors.white, AppColors.stone700, AppColors.stone200),
-      _BottomStyle.soft => (AppColors.stone100, AppColors.stone800, AppColors.stone100),
-      _BottomStyle.primary => (AppColors.emerald600, Colors.white, AppColors.emerald600),
+      _BottomStyle.outline => (
+        Colors.white,
+        AppColors.stone700,
+        AppColors.stone200,
+      ),
+      _BottomStyle.soft => (
+        AppColors.stone100,
+        AppColors.stone800,
+        AppColors.stone100,
+      ),
+      _BottomStyle.primary => (
+        AppColors.emerald600,
+        Colors.white,
+        AppColors.emerald600,
+      ),
       _BottomStyle.danger => (Colors.white, AppColors.red600, AppColors.red400),
     };
     return OutlinedButton(
@@ -462,7 +488,10 @@ class _BottomButton extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -471,20 +500,15 @@ class _BottomButton extends StatelessWidget {
   }
 }
 
-
 /// Bela kartica sa tankom ivicom i jedva vidljivom senkom.
 BoxDecoration _cardDecoration(double radius) => BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: AppColors.stone200),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0A1C1917),
-          blurRadius: 2,
-          offset: Offset(0, 1),
-        ),
-      ],
-    );
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(radius),
+  border: Border.all(color: AppColors.stone200),
+  boxShadow: const [
+    BoxShadow(color: Color(0x0A1C1917), blurRadius: 2, offset: Offset(0, 1)),
+  ],
+);
 
 class _RowDivider extends StatelessWidget {
   const _RowDivider();
@@ -558,8 +582,9 @@ class _AmountRowState extends State<_AmountRow> {
                 child: TextField(
                   controller: _controller,
                   textAlign: TextAlign.right,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                   ],
@@ -577,8 +602,9 @@ class _AmountRowState extends State<_AmountRow> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color:
-                        widget.error ? AppColors.red600 : AppColors.emerald600,
+                    color: widget.error
+                        ? AppColors.red600
+                        : AppColors.emerald600,
                   ),
                 ),
               ),
@@ -629,7 +655,9 @@ class _QrActionButton extends StatelessWidget {
         ),
       ],
     );
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+    );
     return SizedBox(
       height: 46,
       child: primary

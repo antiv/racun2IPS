@@ -80,8 +80,8 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
     final title = code.title.isNotEmpty
         ? code.title
         : (code.data.recipientName.isNotEmpty
-            ? code.data.recipientName
-            : _maskedAccount);
+              ? code.data.recipientName
+              : _maskedAccount);
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
@@ -153,7 +153,11 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(LucideIcons.x, size: 20, color: AppColors.stone400),
+                  icon: const Icon(
+                    LucideIcons.x,
+                    size: 20,
+                    color: AppColors.stone400,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -189,7 +193,10 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
             // Brza izmena iznosa za mesečne račune
             if (isTemplate) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.stone50,
                   borderRadius: BorderRadius.circular(16),
@@ -212,14 +219,16 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                       child: TextField(
                         controller: _amountController,
                         textAlign: TextAlign.right,
-                        keyboardType:
-                            const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                         ],
                         onChanged: (val) {
-                          final parsed =
-                              double.tryParse(val.replaceAll(',', '.'));
+                          final parsed = double.tryParse(
+                            val.replaceAll(',', '.'),
+                          );
                           final newAmt = parsed ?? 0;
                           setState(() => _amount = newAmt);
                           widget.onAmountUpdated(newAmt);
@@ -267,15 +276,22 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(t.account,
-                          style: const TextStyle(
-                              fontSize: 11.5, color: AppColors.stone400)),
-                      Text(code.data.accountNumber,
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'monospace',
-                              color: AppColors.stone700)),
+                      Text(
+                        t.account,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.stone400,
+                        ),
+                      ),
+                      Text(
+                        code.data.accountNumber,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'monospace',
+                          color: AppColors.stone700,
+                        ),
+                      ),
                     ],
                   ),
                   if (code.data.referenceNumber.isNotEmpty) ...[
@@ -283,15 +299,22 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(t.reference,
-                            style: const TextStyle(
-                                fontSize: 11.5, color: AppColors.stone400)),
-                        Text(code.data.referenceNumber,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'monospace',
-                                color: AppColors.stone700)),
+                        Text(
+                          t.reference,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.stone400,
+                          ),
+                        ),
+                        Text(
+                          code.data.referenceNumber,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'monospace',
+                            color: AppColors.stone700,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -347,8 +370,11 @@ class _QuickQrSheetState extends State<QuickQrSheet> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    icon: const Icon(LucideIcons.share2,
-                        size: 16, color: AppColors.stone700),
+                    icon: const Icon(
+                      LucideIcons.share2,
+                      size: 16,
+                      color: AppColors.stone700,
+                    ),
                     label: Text(
                       t.share,
                       style: const TextStyle(

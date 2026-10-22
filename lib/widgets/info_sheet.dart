@@ -124,7 +124,9 @@ Future<void> showInfoSheet(BuildContext context, Translations t) {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     textStyle: const TextStyle(
-                  fontFamily: kFontFamily,fontWeight: FontWeight.w700),
+                      fontFamily: kFontFamily,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   child: Text(t.close),
                 ),

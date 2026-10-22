@@ -50,7 +50,9 @@ class SavedCodeTile extends StatelessWidget {
           ? '${code.data.recipientName} • ${maskedAccount(code)}'
           : maskedAccount(code);
     }
-    return code.data.purpose.isNotEmpty ? code.data.purpose : maskedAccount(code);
+    return code.data.purpose.isNotEmpty
+        ? code.data.purpose
+        : maskedAccount(code);
   }
 
   @override
@@ -94,8 +96,11 @@ class SavedCodeTile extends StatelessWidget {
                     ),
                     if (code.isPinned) ...[
                       const SizedBox(width: 5),
-                      const Icon(LucideIcons.pin,
-                          size: 13, color: AppColors.emerald600),
+                      const Icon(
+                        LucideIcons.pin,
+                        size: 13,
+                        color: AppColors.emerald600,
+                      ),
                     ],
                     if (code.isPaidThisMonth) ...[
                       const SizedBox(width: 6),
@@ -116,10 +121,7 @@ class SavedCodeTile extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 10),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(width: 10), trailing!],
         ],
       ),
     );

@@ -36,23 +36,26 @@ void main() {
       expect(code.data.amount, 3500.0);
     });
 
-    test('stari zapis bez iznosa i poziva na broj prepoznaje kao ownAccount', () {
-      final legacyOwnJson = {
-        'id': 'own-1',
-        'createdAt': '2026-05-10T12:00:00.000',
-        'data': {
-          'recipientName': 'Petar Petrović',
-          'accountNumber': '160000000123456789',
-          'amount': 0.0,
-          'paymentCode': '289',
-          'purpose': '',
-          'referenceNumber': '',
-        },
-      };
+    test(
+      'stari zapis bez iznosa i poziva na broj prepoznaje kao ownAccount',
+      () {
+        final legacyOwnJson = {
+          'id': 'own-1',
+          'createdAt': '2026-05-10T12:00:00.000',
+          'data': {
+            'recipientName': 'Petar Petrović',
+            'accountNumber': '160000000123456789',
+            'amount': 0.0,
+            'paymentCode': '289',
+            'purpose': '',
+            'referenceNumber': '',
+          },
+        };
 
-      final code = SavedCode.fromJson(legacyOwnJson);
-      expect(code.kind, SavedCodeKind.ownAccount);
-    });
+        final code = SavedCode.fromJson(legacyOwnJson);
+        expect(code.kind, SavedCodeKind.ownAccount);
+      },
+    );
 
     test('isPaidThisMonth tačno proverava tekući mesec i godinu', () {
       final now = DateTime.now();
@@ -119,31 +122,36 @@ void main() {
       expect(all.first.isPaidThisMonth, isFalse);
     });
 
-    test('findDuplicate pronalazi šablon sa istim računom i pozivom na broj', () async {
-      final service = SavedCodesService();
-      await service.add(SavedCode(
-        id: 'code-1',
-        createdAt: DateTime.now(),
-        title: 'Infostan',
-        data: InvoiceData(
-          accountNumber: '840-0000711171843-84',
+    test(
+      'findDuplicate pronalazi šablon sa istim računom i pozivom na broj',
+      () async {
+        final service = SavedCodesService();
+        await service.add(
+          SavedCode(
+            id: 'code-1',
+            createdAt: DateTime.now(),
+            title: 'Infostan',
+            data: InvoiceData(
+              accountNumber: '840-0000711171843-84',
+              referenceNumber: '9778123456789',
+              amount: 5000,
+            ),
+          ),
+        );
+
+        final dup = await service.findDuplicate(
+          accountNumber: '840000071117184384',
           referenceNumber: '9778123456789',
-          amount: 5000,
-        ),
-      ));
+        );
+        expect(dup, isNotNull);
+        expect(dup!.id, 'code-1');
 
-      final dup = await service.findDuplicate(
-        accountNumber: '840000071117184384',
-        referenceNumber: '9778123456789',
-      );
-      expect(dup, isNotNull);
-      expect(dup!.id, 'code-1');
-
-      final notDup = await service.findDuplicate(
-        accountNumber: '840000071117184384',
-        referenceNumber: '9799999999999',
-      );
-      expect(notDup, isNull);
-    });
+        final notDup = await service.findDuplicate(
+          accountNumber: '840000071117184384',
+          referenceNumber: '9799999999999',
+        );
+        expect(notDup, isNull);
+      },
+    );
   });
 }

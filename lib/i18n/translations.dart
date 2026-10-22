@@ -351,8 +351,7 @@ const translations = <Language, Translations>{
     title: 'Invoice2IPS',
     subtitle: 'Instant Pay Scan & Generate',
     scanTitle: 'Scan Your Invoice',
-    scanDesc:
-        'Snap your invoice and get an IPS QR code for your banking app.',
+    scanDesc: 'Snap your invoice and get an IPS QR code for your banking app.',
     openCamera: 'Open Camera',
     uploadGallery: 'Gallery',
     pickPdf: 'PDF invoice',
@@ -393,7 +392,8 @@ const translations = <Language, Translations>{
     version: 'Version',
     poweredBy: 'Powered by',
     close: 'Close',
-    disclaimer: 'Note: Always verify the extracted data! AI can sometimes make mistakes.',
+    disclaimer:
+        'Note: Always verify the extracted data! AI can sometimes make mistakes.',
     validationError:
         "We couldn't extract all the necessary payment data from the image (recipient, 18-digit account, amount). Please try again.",
     charLimit: 'characters',

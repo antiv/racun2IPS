@@ -117,7 +117,13 @@ class QrScannerService {
     final tiles = <Uint8List>[];
     for (final y in ys) {
       for (final x in xs) {
-        var tile = img.copyCrop(oriented, x: x, y: y, width: tileW, height: tileH);
+        var tile = img.copyCrop(
+          oriented,
+          x: x,
+          y: y,
+          width: tileW,
+          height: tileH,
+        );
         if (math.max(tile.width, tile.height) < 1500) {
           tile = img.copyResize(
             tile,

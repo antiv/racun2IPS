@@ -6,16 +6,66 @@ import 'ips.dart';
 /// heurističkog prepoznavanja ćiriličnih uplatnica (EPS, Infostan, komunalije).
 String cyrillicToLatin(String input) {
   const map = {
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Ђ': 'Đ', 'Е': 'E',
-    'Ж': 'Ž', 'З': 'Z', 'И': 'I', 'Ј': 'J', 'К': 'K', 'Л': 'L', 'Љ': 'Lj',
-    'М': 'M', 'Н': 'N', 'Њ': 'Nj', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S',
-    'Т': 'T', 'Ћ': 'Ć', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'C', 'Ч': 'Č',
-    'Џ': 'Dž', 'Ш': 'Š',
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'ђ': 'đ', 'е': 'e',
-    'ж': 'ž', 'з': 'z', 'и': 'i', 'ј': 'j', 'к': 'k', 'л': 'l', 'љ': 'lj',
-    'м': 'm', 'н': 'n', 'њ': 'nj', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's',
-    'т': 't', 'ћ': 'ć', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'č',
-    'џ': 'dž', 'ш': 'š',
+    'А': 'A',
+    'Б': 'B',
+    'В': 'V',
+    'Г': 'G',
+    'Д': 'D',
+    'Ђ': 'Đ',
+    'Е': 'E',
+    'Ж': 'Ž',
+    'З': 'Z',
+    'И': 'I',
+    'Ј': 'J',
+    'К': 'K',
+    'Л': 'L',
+    'Љ': 'Lj',
+    'М': 'M',
+    'Н': 'N',
+    'Њ': 'Nj',
+    'О': 'O',
+    'П': 'P',
+    'Р': 'R',
+    'С': 'S',
+    'Т': 'T',
+    'Ћ': 'Ć',
+    'У': 'U',
+    'Ф': 'F',
+    'Х': 'H',
+    'Ц': 'C',
+    'Ч': 'Č',
+    'Џ': 'Dž',
+    'Ш': 'Š',
+    'а': 'a',
+    'б': 'b',
+    'в': 'v',
+    'г': 'g',
+    'д': 'd',
+    'ђ': 'đ',
+    'е': 'e',
+    'ж': 'ž',
+    'з': 'z',
+    'и': 'i',
+    'ј': 'j',
+    'к': 'k',
+    'л': 'l',
+    'љ': 'lj',
+    'м': 'm',
+    'н': 'n',
+    'њ': 'nj',
+    'о': 'o',
+    'п': 'p',
+    'р': 'r',
+    'с': 's',
+    'т': 't',
+    'ћ': 'ć',
+    'у': 'u',
+    'ф': 'f',
+    'х': 'h',
+    'ц': 'c',
+    'ч': 'č',
+    'џ': 'dž',
+    'ш': 'š',
   };
   final buf = StringBuffer();
   for (var i = 0; i < input.length; i++) {
@@ -38,8 +88,10 @@ InvoiceData? tryParseInvoiceText(String rawText) {
   if (rawText.trim().isEmpty) return null;
 
   // 0. Ako tekst već sadrži sirovi NBS IPS QR string (npr. K:PR|V:01|...), parsiraj direktno.
-  final ipsMatch = RegExp(r'K:(?:PR|EK)\|[^\r\n]+', caseSensitive: false)
-      .firstMatch(rawText);
+  final ipsMatch = RegExp(
+    r'K:(?:PR|EK)\|[^\r\n]+',
+    caseSensitive: false,
+  ).firstMatch(rawText);
   if (ipsMatch != null) {
     final direct = parseIpsString(ipsMatch.group(0)!);
     if (direct != null && validateAccountNumber(direct.accountNumber)) {
@@ -48,7 +100,9 @@ InvoiceData? tryParseInvoiceText(String rawText) {
   }
 
   final latinText = cyrillicToLatin(rawText);
-  final normalizedText = latinText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  final normalizedText = latinText
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
   final lines = normalizedText
       .split('\n')
       .map((l) => l.trim())
@@ -102,8 +156,9 @@ String? _extractValidAccountNumber(String fullText, List<String> lines) {
   final candidates = <_ScoredCandidate<String>>[];
 
   // Regex 1: Format sa crticama (npr. 840-0000711171843-84 ili 160 - 123456 - 78)
-  final dashedRegex =
-      RegExp(r'\b(\d{3})\s*[-–—]\s*(\d{1,13})\s*[-–—]\s*(\d{2})\b');
+  final dashedRegex = RegExp(
+    r'\b(\d{3})\s*[-–—]\s*(\d{1,13})\s*[-–—]\s*(\d{2})\b',
+  );
   // Regex 2: Neprekidni niz od 18 cifara
   final flatRegex = RegExp(r'\b(\d{18})\b');
 
@@ -172,8 +227,8 @@ double? _extractAmount(String fullText, List<String> lines) {
     // OCR po kolonama često vrati vrednost pre labele ("400,00" pa "Ukupno za
     // uplatu:"), pa se ključne reči traže i u sledećoj liniji — ali samo ako je
     // ona čista labela, a ne rečenica sa sopstvenim iznosom.
-    final nextIsLabel = i + 1 < lines.length &&
-        !amountRegex.hasMatch(lines[i + 1]);
+    final nextIsLabel =
+        i + 1 < lines.length && !amountRegex.hasMatch(lines[i + 1]);
     final context = '$prevLower $lower ${nextIsLabel ? nextLower : ''}';
 
     for (final match in amountRegex.allMatches(line)) {
@@ -218,17 +273,17 @@ double? _extractAmount(String fullText, List<String> lines) {
 
       // Negativni poeni za međuzbirove, poreze, očitanja brojila ili tarife
       if (_containsAny(lower, const [
-        'osnovica',
-        'stopa',
-        'pdv',
-        'kamata',
-        'popust',
-        'umanjenje',
-        'kwh',
-        'm3',
-        'prethodni',
-        'pretplata',
-      ]) &&
+            'osnovica',
+            'stopa',
+            'pdv',
+            'kamata',
+            'popust',
+            'umanjenje',
+            'kwh',
+            'm3',
+            'prethodni',
+            'pretplata',
+          ]) &&
           !_containsAny(lower, const [
             'za uplatu',
             'ukupno za uplatu',
@@ -326,8 +381,7 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
         if (i + 2 < lines.length) lines[i + 2],
       ].join(' ');
 
-      final tokenRegex =
-          RegExp(r'\b([0-9]{2}[-\s]?[0-9A-Z][0-9A-Z-]{3,22})\b');
+      final tokenRegex = RegExp(r'\b([0-9]{2}[-\s]?[0-9A-Z][0-9A-Z-]{3,22})\b');
       for (final m in tokenRegex.allMatches(window)) {
         final rawToken = m.group(1)!.trim();
         final cleanDigits = rawToken.replaceAll(RegExp(r'[^0-9]'), '');
@@ -377,12 +431,15 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
       ];
       for (final sLine in searchLines) {
         final cleanedLine = sLine.replaceFirst(
-          RegExp(r'^.*?(?:poziv na broj|odobrenje)\s*[():\-]*\s*',
-              caseSensitive: false),
+          RegExp(
+            r'^.*?(?:poziv na broj|odobrenje)\s*[():\-]*\s*',
+            caseSensitive: false,
+          ),
           '',
         );
-        final m = RegExp(r'\b(?:00[\s-]*)?([0-9][0-9A-Z-]{3,22})\b')
-            .firstMatch(cleanedLine);
+        final m = RegExp(
+          r'\b(?:00[\s-]*)?([0-9][0-9A-Z-]{3,22})\b',
+        ).firstMatch(cleanedLine);
         if (m != null) {
           final token = m.group(1)!;
           final digitsOnly = token.replaceAll(RegExp(r'[^0-9]'), '');
@@ -418,7 +475,9 @@ Set<String> _payerNames(List<String> lines) {
   final names = <String>{};
   for (var i = 0; i < lines.length; i++) {
     final lower = lines[i].toLowerCase();
-    if (!lower.startsWith('platilac') && !lower.startsWith('uplatilac')) continue;
+    if (!lower.startsWith('platilac') && !lower.startsWith('uplatilac')) {
+      continue;
+    }
     for (var k = i + 1; k <= i + 3 && k < lines.length; k++) {
       final candidate = lines[k].trim();
       final candLower = candidate.toLowerCase();
@@ -508,8 +567,10 @@ String? _extractPurpose(List<String> lines) {
         lower.contains('svrha placanja')) {
       final inline = line
           .replaceFirst(
-            RegExp(r'^.*?svrha\s+(?:uplate|plaćanja|placanja)\s*[:\-]?\s*',
-                caseSensitive: false),
+            RegExp(
+              r'^.*?svrha\s+(?:uplate|plaćanja|placanja)\s*[:\-]?\s*',
+              caseSensitive: false,
+            ),
             '',
           )
           .trim();

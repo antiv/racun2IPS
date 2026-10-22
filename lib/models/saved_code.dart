@@ -60,7 +60,9 @@ class SavedCode {
     return SavedCode(
       id: json['id'] as String,
       createdAt: createdAt,
-      updatedAt: rawUpdatedAt != null ? DateTime.parse(rawUpdatedAt) : createdAt,
+      updatedAt: rawUpdatedAt != null
+          ? DateTime.parse(rawUpdatedAt)
+          : createdAt,
       data: data,
       title: json['title'] as String? ?? '',
       kind: kind,
@@ -70,15 +72,15 @@ class SavedCode {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        'title': title,
-        'kind': kind.name,
-        'isPinned': isPinned,
-        'lastPaidAt': lastPaidAt?.toIso8601String(),
-        'data': data.toJson(),
-      };
+    'id': id,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    'title': title,
+    'kind': kind.name,
+    'isPinned': isPinned,
+    'lastPaidAt': lastPaidAt?.toIso8601String(),
+    'data': data.toJson(),
+  };
 
   SavedCode copyWith({
     String? title,

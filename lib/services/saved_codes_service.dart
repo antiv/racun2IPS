@@ -96,7 +96,8 @@ class SavedCodesService {
       if (referenceNumber.isEmpty &&
           recipientName != null &&
           recipientName.isNotEmpty &&
-          code.data.recipientName.toLowerCase() == recipientName.toLowerCase()) {
+          code.data.recipientName.toLowerCase() ==
+              recipientName.toLowerCase()) {
         return code;
       }
     }
@@ -124,8 +125,9 @@ class SavedCodesService {
     if (decoded is! List) {
       throw const FormatException('Očekivan je niz sačuvanih kodova.');
     }
-    final incoming =
-        decoded.map((e) => SavedCode.fromJson(e as Map<String, dynamic>)).toList();
+    final incoming = decoded
+        .map((e) => SavedCode.fromJson(e as Map<String, dynamic>))
+        .toList();
     final existing = await loadAll();
     final existingIds = existing.map((c) => c.id).toSet();
     final newOnes = incoming.where((c) => !existingIds.contains(c.id)).toList();

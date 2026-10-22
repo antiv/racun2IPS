@@ -3,8 +3,10 @@ import 'package:invoice2ips/utils/invoice_text_parser.dart';
 
 void main() {
   group('tryParseInvoiceText (Lokalni OCR parser)', () {
-    test('izvlači podatke sa standardnog obrasca srpske uplatnice (Model 97)', () {
-      const ocrText = '''
+    test(
+      'izvlači podatke sa standardnog obrasca srpske uplatnice (Model 97)',
+      () {
+        const ocrText = '''
 NALOG ZA UPLATU
 Uplatilac
 Petar Petrović, Bulevar Oslobođenja 12
@@ -20,15 +22,16 @@ Model i poziv na broj (odobrenje)
 97 78-123456789
 ''';
 
-      final data = tryParseInvoiceText(ocrText);
-      expect(data, isNotNull);
-      expect(data!.recipientName, 'JKP INFOSTAN TEHNOLOGIJE BEOGRAD');
-      expect(data.accountNumber, '840000071117184384');
-      expect(data.amount, closeTo(8450.50, 0.001));
-      expect(data.paymentCode, '289'); // 189 konvertovano u 289
-      expect(data.purpose, 'Račun za oktobar 2026');
-      expect(data.referenceNumber, '9778123456789');
-    });
+        final data = tryParseInvoiceText(ocrText);
+        expect(data, isNotNull);
+        expect(data!.recipientName, 'JKP INFOSTAN TEHNOLOGIJE BEOGRAD');
+        expect(data.accountNumber, '840000071117184384');
+        expect(data.amount, closeTo(8450.50, 0.001));
+        expect(data.paymentCode, '289'); // 189 konvertovano u 289
+        expect(data.purpose, 'Račun za oktobar 2026');
+        expect(data.referenceNumber, '9778123456789');
+      },
+    );
 
     test('izvlači podatke sa EPS računa sa tabelarnim prikazom', () {
       const ocrText = '''
@@ -65,25 +68,31 @@ K:PR|V:01|C:1|R:840000071117184384|N:Yettel d.o.o.|I:RSD2499,00|SF:289|S:Mesecni
       expect(data.referenceNumber, '9778123456789');
     });
 
-    test('vraća null (aktivira AI fallback) ako račun ne prolazi Modulo-97', () {
-      const invalidMod97Text = '''
+    test(
+      'vraća null (aktivira AI fallback) ako račun ne prolazi Modulo-97',
+      () {
+        const invalidMod97Text = '''
 Primalac: JKP Informatika
 Za uplatu: 1.500,00 RSD
 Račun primaoca: 840-0000711171843-99
 ''';
-      expect(tryParseInvoiceText(invalidMod97Text), isNull);
-    });
+        expect(tryParseInvoiceText(invalidMod97Text), isNull);
+      },
+    );
 
-    test('vraća null (aktivira AI fallback) ako je Model 97 neispravan po Modulo-97', () {
-      const invalidRefMod97Text = '''
+    test(
+      'vraća null (aktivira AI fallback) ako je Model 97 neispravan po Modulo-97',
+      () {
+        const invalidRefMod97Text = '''
 Primalac: JKP Informatika
 Za uplatu: 1.500,00 RSD
 Račun primaoca: 840-0000711171843-84
 Model: 97
 Poziv na broj: 97 11-123456789
 ''';
-      expect(tryParseInvoiceText(invalidRefMod97Text), isNull);
-    });
+        expect(tryParseInvoiceText(invalidRefMod97Text), isNull);
+      },
+    );
 
     test('vraća null kada nedostaje iznos za uplatu', () {
       const missingAmountText = '''
@@ -185,8 +194,10 @@ Glavna 1
       expect(data.accountNumber, '160000000001234595');
     });
 
-    test('procenat i iznos iz rečenice ne potiskuju pravi iznos (ćirilica)', () {
-      const text = '''
+    test(
+      'procenat i iznos iz rečenice ne potiskuju pravi iznos (ćirilica)',
+      () {
+        const text = '''
 ЕПС АД Београд
 2.894,64 дин
 ЗА УПЛАТУ ЗА ЕЛЕКТРИЧНУ ЕНЕРГИЈУ (А+Б)
@@ -205,12 +216,13 @@ Glavna 1
 БУЛЕВАР ОСЛОБОЂЕЊА 12
 ЕПС АД Београд
 ''';
-      final data = tryParseInvoiceText(text);
-      expect(data, isNotNull);
-      expect(data!.amount, closeTo(2894.64, 0.001));
-      expect(data.recipientName, 'EPS AD Beograd');
-      expect(data.referenceNumber, '97921234567890');
-    });
+        final data = tryParseInvoiceText(text);
+        expect(data, isNotNull);
+        expect(data!.amount, closeTo(2894.64, 0.001));
+        expect(data.recipientName, 'EPS AD Beograd');
+        expect(data.referenceNumber, '97921234567890');
+      },
+    );
 
     test('poziv na broj se ne uzima iz rečenice svrhe uplate', () {
       const text = '''

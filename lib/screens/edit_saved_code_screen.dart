@@ -89,7 +89,11 @@ class _EditSavedCodeScreenState extends State<EditSavedCodeScreen> {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, size: 22, color: AppColors.stone800),
+          icon: const Icon(
+            LucideIcons.arrowLeft,
+            size: 22,
+            color: AppColors.stone800,
+          ),
           tooltip: widget.t.cancel,
           onPressed: () => Navigator.of(context).pop(),
         ),

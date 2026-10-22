@@ -20,7 +20,11 @@ Future<bool> copyToClipboard(String text) async {
 
 /// Renderuje IPS QR kod kao PNG (beli okvir, kao QR kartica u aplikaciji)
 /// i otvara sistemski share dijalog.
-Future<void> shareQrCode(String ipsString, String title, String description) async {
+Future<void> shareQrCode(
+  String ipsString,
+  String title,
+  String description,
+) async {
   const qrSize = 560.0;
   const padding = 48.0;
   const total = qrSize + padding * 2;
@@ -49,7 +53,10 @@ Future<void> shareQrCode(String ipsString, String title, String description) asy
   canvas.translate(padding, padding);
   painter.paint(canvas, const ui.Size(qrSize, qrSize));
 
-  final image = await recorder.endRecording().toImage(total.toInt(), total.toInt());
+  final image = await recorder.endRecording().toImage(
+    total.toInt(),
+    total.toInt(),
+  );
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
   if (byteData == null) return;
 
@@ -57,11 +64,13 @@ Future<void> shareQrCode(String ipsString, String title, String description) asy
   final file = File('${dir.path}/ips-qr.png');
   await file.writeAsBytes(byteData.buffer.asUint8List());
 
-  await SharePlus.instance.share(ShareParams(
-    files: [XFile(file.path, mimeType: 'image/png')],
-    subject: title,
-    text: description,
-  ));
+  await SharePlus.instance.share(
+    ShareParams(
+      files: [XFile(file.path, mimeType: 'image/png')],
+      subject: title,
+      text: description,
+    ),
+  );
 }
 
 /// Upisuje [content] u privremeni .json fajl i otvara sistemski share
@@ -77,9 +86,11 @@ Future<void> shareJsonBackup(
   final file = File('${dir.path}/$fileName');
   await file.writeAsString(content);
 
-  await SharePlus.instance.share(ShareParams(
-    files: [XFile(file.path, mimeType: 'application/json')],
-    subject: subject,
-    text: text,
-  ));
+  await SharePlus.instance.share(
+    ShareParams(
+      files: [XFile(file.path, mimeType: 'application/json')],
+      subject: subject,
+      text: text,
+    ),
+  );
 }

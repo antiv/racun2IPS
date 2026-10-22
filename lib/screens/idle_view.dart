@@ -85,12 +85,31 @@ class IdleView extends StatelessWidget {
                           opacity: 0.4,
                           child: ColorFiltered(
                             colorFilter: const ColorFilter.matrix(<double>[
-                              0.2126, 0.7152, 0.0722, 0, 0,
-                              0.2126, 0.7152, 0.0722, 0, 0,
-                              0.2126, 0.7152, 0.0722, 0, 0,
-                              0, 0, 0, 1, 0,
+                              0.2126,
+                              0.7152,
+                              0.0722,
+                              0,
+                              0,
+                              0.2126,
+                              0.7152,
+                              0.0722,
+                              0,
+                              0,
+                              0.2126,
+                              0.7152,
+                              0.0722,
+                              0,
+                              0,
+                              0,
+                              0,
+                              0,
+                              1,
+                              0,
                             ]),
-                            child: Image.asset('assets/images/ant-biocode.png', height: 15),
+                            child: Image.asset(
+                              'assets/images/ant-biocode.png',
+                              height: 15,
+                            ),
                           ),
                         ),
                       ),
@@ -108,17 +127,13 @@ class IdleView extends StatelessWidget {
 
 /// Bela kartica sa tankom ivicom — osnovni kontejner na početnom ekranu.
 BoxDecoration _cardDecoration(double radius) => BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: AppColors.stone200),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0A1C1917),
-          blurRadius: 2,
-          offset: Offset(0, 1),
-        ),
-      ],
-    );
+  color: Colors.white,
+  borderRadius: BorderRadius.circular(radius),
+  border: Border.all(color: AppColors.stone200),
+  boxShadow: const [
+    BoxShadow(color: Color(0x0A1C1917), blurRadius: 2, offset: Offset(0, 1)),
+  ],
+);
 
 class _ScanCard extends StatelessWidget {
   const _ScanCard({
@@ -200,13 +215,22 @@ class _ScanCard extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.emerald600,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 textStyle: const TextStyle(
-                  fontFamily: kFontFamily,fontSize: 15.5, fontWeight: FontWeight.w600),
+                  fontFamily: kFontFamily,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                ),
                 elevation: 0,
               ),
               icon: const Icon(LucideIcons.camera, size: 20),
-              label: Text(t.openCamera, maxLines: 1, overflow: TextOverflow.ellipsis),
+              label: Text(
+                t.openCamera,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -245,7 +269,11 @@ class _ScanCard extends StatelessWidget {
 
 /// Dugme sa ikonom iznad teksta za alternativne izvore (galerija, PDF, tekst).
 class _SourceButton extends StatelessWidget {
-  const _SourceButton({required this.onTap, required this.icon, required this.label});
+  const _SourceButton({
+    required this.onTap,
+    required this.icon,
+    required this.label,
+  });
 
   final VoidCallback onTap;
   final IconData icon;
@@ -262,7 +290,9 @@ class _SourceButton extends StatelessWidget {
           backgroundColor: AppColors.stone50,
           side: const BorderSide(color: AppColors.stone200),
           padding: const EdgeInsets.symmetric(horizontal: 6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -329,7 +359,10 @@ class _SavedSection extends StatelessWidget {
                     if (total > 0) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.stone100,
                           borderRadius: BorderRadius.circular(999),
@@ -354,7 +387,7 @@ class _SavedSection extends StatelessWidget {
                   minimumSize: const Size(44, 44),
                   padding: const EdgeInsets.only(left: 10, right: 4),
                   textStyle: const TextStyle(
-                  fontFamily: kFontFamily,
+                    fontFamily: kFontFamily,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -381,7 +414,11 @@ class _SavedSection extends StatelessWidget {
               children: [
                 for (var i = 0; i < codes.length; i++) ...[
                   if (i > 0)
-                    const Divider(height: 1, thickness: 1, color: AppColors.stone100),
+                    const Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: AppColors.stone100,
+                    ),
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -415,7 +452,8 @@ class _SavedSection extends StatelessWidget {
   }
 
   String _subtitle(SavedCode code) {
-    final recipient = code.title.isNotEmpty && code.data.recipientName.isNotEmpty
+    final recipient =
+        code.title.isNotEmpty && code.data.recipientName.isNotEmpty
         ? code.data.recipientName
         : SavedCodeTile.maskedAccount(code);
     return '$recipient · ${SavedCodeTile.amountLabel(code, t)}';
@@ -447,7 +485,11 @@ class _EmptySavedCard extends StatelessWidget {
                   color: AppColors.stone100,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(LucideIcons.qrCode, size: 22, color: AppColors.stone500),
+                child: const Icon(
+                  LucideIcons.qrCode,
+                  size: 22,
+                  color: AppColors.stone500,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -475,7 +517,11 @@ class _EmptySavedCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(LucideIcons.circlePlus, size: 20, color: AppColors.emerald600),
+              const Icon(
+                LucideIcons.circlePlus,
+                size: 20,
+                color: AppColors.emerald600,
+              ),
             ],
           ),
         ),

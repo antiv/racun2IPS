@@ -87,8 +87,7 @@ InvoiceData? parseIpsString(String raw) {
     }
   }
 
-  var paymentCode =
-      (tags['SF'] ?? '289').replaceAll(RegExp(r'[^0-9]'), '');
+  var paymentCode = (tags['SF'] ?? '289').replaceAll(RegExp(r'[^0-9]'), '');
   if (paymentCode.isEmpty) {
     paymentCode = '289';
   } else if (paymentCode.startsWith('1') && paymentCode.length == 3) {
@@ -106,7 +105,9 @@ InvoiceData? parseIpsString(String raw) {
       ? rawPurpose.substring(0, IpsLimits.s)
       : rawPurpose;
 
-  var referenceNumber = (tags['RO'] ?? '').replaceAll(RegExp(r'\s+'), '').trim();
+  var referenceNumber = (tags['RO'] ?? '')
+      .replaceAll(RegExp(r'\s+'), '')
+      .trim();
   if (referenceNumber.startsWith('97')) {
     referenceNumber = referenceNumber.replaceAll('-', '');
   }
@@ -199,8 +200,9 @@ String generateIpsString(
     IpsLimits.s,
   );
   final paymentCode = clip(
-    sanitizePipe(data.paymentCode.isEmpty ? '289' : data.paymentCode)
-        .replaceAll(RegExp(r'[^0-9]'), ''),
+    sanitizePipe(
+      data.paymentCode.isEmpty ? '289' : data.paymentCode,
+    ).replaceAll(RegExp(r'[^0-9]'), ''),
     IpsLimits.sf,
   );
 
@@ -217,9 +219,14 @@ String generateIpsString(
 
   if (data.referenceNumber.isNotEmpty) {
     // Ukloni razmake i pipe karaktere
-    var cleanRef = sanitizePipe(data.referenceNumber).replaceAll(RegExp(r'\s+'), '');
+    var cleanRef = sanitizePipe(
+      data.referenceNumber,
+    ).replaceAll(RegExp(r'\s+'), '');
     // Ukloni "model" prefiks ako je slučajno uključen
-    cleanRef = cleanRef.replaceFirst(RegExp(r'^(model|mod)', caseSensitive: false), '');
+    cleanRef = cleanRef.replaceFirst(
+      RegExp(r'^(model|mod)', caseSensitive: false),
+      '',
+    );
     // Zadrži samo alfanumerike i crtice
     cleanRef = cleanRef.replaceAll(RegExp(r'[^a-zA-Z0-9-]'), '');
 
