@@ -62,3 +62,6 @@ android/key.properties
 release-key.jks
 ios/deploy.env
 android/deploy.env
+
+# Promo video — generiše marketing/video/make_video.py
+marketing/video/out/

@@ -346,7 +346,7 @@ def render(html: str, out: Path, device: str) -> None:
             check=True, capture_output=True)
     finally:
         page.unlink()
-    print(f"  {out.relative_to(HERE)}")
+    print(f"  {out.relative_to(HERE) if out.is_relative_to(HERE) else out}")
 
 
 def main() -> int:
