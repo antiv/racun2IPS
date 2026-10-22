@@ -3,7 +3,7 @@ description: "Invoice2IPS — skeniranje računa i generisanje NBS IPS QR koda"
 publish_to: 'none'
 
 # Verzija prati Tauri projekat (invoice2ips): versionName+versionCode.
-version: 1.0.23+1000022
+version: 1.0.24+1000023
 
 environment:
   sdk: ^3.12.2
