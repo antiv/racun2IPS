@@ -1,18 +1,24 @@
-# Bezbednost i prijava ranjivosti (Security Policy)
+# Security Policy
 
-Bezbednost podataka korisnika i zaštita privatnosti su na prvom mestu u aplikaciji **Invoice2IPS**.
+User data security and privacy are fundamental principles in **Invoice2IPS**.
 
-## Arhitektura privatnosti
+---
 
-- Aplikacija **ne čuva i ne šalje podatke na sopstvene servere**.
-- Ako račun na sebi ima odštampan NBS IPS QR kod, on se čita **100% lokalno na uređaju**.
-- Ako se koristi lokalni OCR (Google ML Kit), tekst se obrađuje **isključivo on-device**.
-- Samo u slučaju neuspeha lokalnih metoda, slika ili tekst računa se prosleđuje na Google Gemini API radi ekstrakcije strukturiranih podataka.
-- Svi sačuvani šabloni i kodovi se čuvaju isključivo u lokalnoj memoriji uređaja (`SharedPreferences`).
+## Privacy by Design
 
-## Prijava bezbednosnih propusta
+- **Zero telemetry/tracking**: The app does not collect user data or transmit information to proprietary backend servers.
+- **On-device extraction**:
+  - Existing NBS IPS QR codes are scanned and decoded **100% locally on the device**.
+  - Local OCR and payment slip parsing run **entirely on-device** using Google ML Kit.
+- **Controlled cloud fallback**: Only when local deterministic methods fail (unclear images, non-standard layout, or handwriting) is the document sent to the Google Gemini API solely for structured data extraction.
+- **Local storage**: All saved templates, payment history, and user codes are stored exclusively in the device's local sandboxed storage (`SharedPreferences`).
 
-Ako otkrijete bilo kakav bezbednosni problem ili ranjivost:
-1. **Molimo vas da ga NE prijavljujete javno kroz GitHub Issues.**
-2. Pošaljite poverljivu poruku na email adresu: `iantonijevic@gmail.com` sa detaljnim opisom problema i koracima za reprodukciju.
-3. Odgovorićemo u najkraćem mogućem roku i objaviti ispravku pre javnog objavljivanja detalja.
+---
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability or privacy concern:
+
+1. **Please do NOT disclose it publicly via GitHub Issues.**
+2. Send a confidential report to `iantonijevic@gmail.com` with a detailed description of the issue and reproduction steps.
+3. We will respond promptly, investigate, and publish a fix before public disclosure.
