@@ -3,7 +3,7 @@ description: "Invoice2IPS — skeniranje računa i generisanje NBS IPS QR koda"
 publish_to: 'none'
 
 # Verzija prati Tauri projekat (invoice2ips): versionName+versionCode.
-version: 1.0.26+1000025
+version: 1.0.27+1000026
 
 environment:
   sdk: ^3.12.2
@@ -38,9 +38,9 @@ dependencies:
   # Native prompt za ocenjivanje (Play In-App Review / SKStoreReviewController).
   in_app_review: ^2.0.12
   # Lokalni OCR na uređaju (pre slanja na Gemini AI).
-  google_mlkit_text_recognition: ^0.17.1
+  google_mlkit_text_recognition: ^1.0.1
   # Lokalna detekcija postojećeg NBS IPS QR koda na slici računa.
-  google_mlkit_barcode_scanning: ^0.16.1
+  google_mlkit_barcode_scanning: ^1.0.1
   lucide_icons_flutter: ^4.0.1
   image: ^4.3.0
 

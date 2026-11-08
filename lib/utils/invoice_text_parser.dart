@@ -74,15 +74,75 @@ String cyrillicToLatin(String input) {
   return buf.toString();
 }
 
+/// Google ML Kit na uređaju poseduje samo latinični model (`TextRecognitionScript.latin`),
+/// pa ćirilične uplatnice čita kao vizuelno slična latinična slova (homoglife),
+/// npr. "Прималац:" -> "IpuManaų:", "Позив на број" -> "No3MB Ha őpoj",
+/// "ЕПС АД Београд" -> "EnC AA Beorpan". Ova funkcija normalizuje te obrasce.
+String _normalizeOcrHomoglyphs(String input) {
+  var s = input;
+  final replacements = <(RegExp, String)>[
+    (
+      RegExp(r'\b[NnIli1]na[Tt][uUiI1l]?n?a[uyųj]\s*:', caseSensitive: false),
+      'Platilac:',
+    ),
+    (
+      RegExp(r'\b[Cc]Bpxa\s+ynna[tT]e\s*:?', caseSensitive: false),
+      'Svrha uplate:',
+    ),
+    (
+      RegExp(r'\bYnnata\s+no\s+pa[4čcy]yHy\b', caseSensitive: false),
+      'Uplata po računu',
+    ),
+    (
+      RegExp(
+        r'\b[IinpN1l]p[uUiImM][Mm]ana[uyųj]\s*:',
+        caseSensitive: false,
+      ),
+      'Primalac:',
+    ),
+    (
+      RegExp(r'\b[WLШш]u[p.]*\s*nna[hħ]\.?', caseSensitive: false),
+      'Šif. plać.',
+    ),
+    (RegExp(r'\bBany[tT]a\b', caseSensitive: false), 'Valuta'),
+    (RegExp(r'\bPCA\b'), 'RSD'),
+    (RegExp(r'\b[MИI]3[HO0][OC]\b', caseSensitive: false), 'Iznos'),
+    (
+      RegExp(r'\bTeky\S+\s+pa[y4čc]y[Hh]\s+np\S+', caseSensitive: false),
+      'Tekući račun primaoca',
+    ),
+    (
+      RegExp(r'\b[BGb6]poj\s+mo[gda]ena\b', caseSensitive: false),
+      'Broj modela',
+    ),
+    (
+      RegExp(
+        r'\b[NnlI1|]*o3[MmUuI][Bb]\s+[Hh]a\s+\S*poj\b',
+        caseSensitive: false,
+      ),
+      'Poziv na broj',
+    ),
+    (RegExp(r'\bE[nN]C\s+A[ADA]\b'), 'EPS AD'),
+    (
+      RegExp(r'\b[B5b]e[oO0]rpa[ngdNADa]\b', caseSensitive: false),
+      'Beograd',
+    ),
+  ];
+  for (final (pattern, replacement) in replacements) {
+    s = s.replaceAll(pattern, replacement);
+  }
+  return s;
+}
+
 /// Heuristički parser teksta sa srpskih računa i uplatnica (za lokalni OCR i clipboard).
 ///
 /// Primenjuje strogi "Confidence Gate": vraća [InvoiceData] isključivo kada su:
 /// 1. Broj računa (18 cifara) matematički validan po Modulo-97 algoritmu,
-/// 2. Iznos (> 0) nedvosmisleno prepoznat uz ključne reči za uplatu/iznos,
-/// 3. Naziv primaoca pronađen (min 3 karaktera),
-/// 4. Poziv na broj validan (posebno Modulo-97 ako je na računu detektovan model 97).
+/// 2. Naziv primaoca pronađen (min 3 karaktera),
+/// 3. Poziv na broj validan (posebno Modulo-97 ako je na računu detektovan model 97).
+/// Iznos ako nije pronađen u tekstu uplatnice ostaje 0 (korisnik ga unosi ručno u formi).
 ///
-/// Ako bilo koji od uslova nije zadovoljen, vraća `null` kako bi obrada
+/// Ako bilo koji od obaveznih uslova nije zadovoljen, vraća `null` kako bi obrada
 /// bezbedno prešla na Gemini AI fallback.
 InvoiceData? tryParseInvoiceText(String rawText) {
   if (rawText.trim().isEmpty) return null;
@@ -99,13 +159,13 @@ InvoiceData? tryParseInvoiceText(String rawText) {
     }
   }
 
-  final latinText = cyrillicToLatin(rawText);
+  final latinText = _normalizeOcrHomoglyphs(cyrillicToLatin(rawText));
   final normalizedText = latinText
       .replaceAll('\r\n', '\n')
       .replaceAll('\r', '\n');
   final lines = normalizedText
       .split('\n')
-      .map((l) => l.trim())
+      .map((l) => l.replaceAll('|', ' ').trim())
       .where((l) => l.isNotEmpty)
       .toList();
   if (lines.isEmpty) return null;
@@ -116,11 +176,9 @@ InvoiceData? tryParseInvoiceText(String rawText) {
     return null;
   }
 
-  // 2. Iznos (mora imati visok stepen pouzdanosti uz ključne reči).
-  final amountResult = _extractAmount(normalizedText, lines);
-  if (amountResult == null || amountResult <= 0) {
-    return null;
-  }
+  // 2. Iznos: ako je prepoznat koristi se, inače 0 (korisnik unosi u formi).
+  final rawAmount = _extractAmount(normalizedText, lines);
+  final amountResult = (rawAmount != null && rawAmount > 0) ? rawAmount : 0.0;
 
   // 3. Poziv na broj i model.
   final refResult = _extractReferenceNumber(normalizedText, lines);
@@ -340,7 +398,7 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
     'model',
   ]);
   final mentionsModel97 = RegExp(
-    r'model[^\n\d]{0,15}97\b|\b97\s+[\dA-Z]{2}[-\s]?[\dA-Z]{3,}',
+    r'model[a-z\s:.\-]{0,20}\b97\b|\b97\s+\d{2}[-\s]?\d{3,}',
     caseSensitive: false,
   ).hasMatch(fullText);
 
@@ -379,6 +437,7 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
         line,
         if (i + 1 < lines.length) lines[i + 1],
         if (i + 2 < lines.length) lines[i + 2],
+        if (i + 3 < lines.length) lines[i + 3],
       ].join(' ');
 
       final tokenRegex = RegExp(r'\b([0-9]{2}[-\s]?[0-9A-Z][0-9A-Z-]{3,22})\b');

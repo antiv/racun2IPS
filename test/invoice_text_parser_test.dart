@@ -94,13 +94,105 @@ Poziv na broj: 97 11-123456789
       },
     );
 
-    test('vraća null kada nedostaje iznos za uplatu', () {
+    test('prihvata 0 kada nedostaje iznos za uplatu', () {
       const missingAmountText = '''
 Primalac: JKP Informatika
 Račun primaoca: 840-0000711171843-84
 ''';
-      expect(tryParseInvoiceText(missingAmountText), isNull);
+      final data = tryParseInvoiceText(missingAmountText);
+      expect(data, isNotNull);
+      expect(data!.amount, 0.0);
+      expect(data.accountNumber, '840000071117184384');
+      expect(data.recipientName, 'JKP Informatika');
     });
+
+    test('uspešno procesira EPS uplatnicu sa praznim poljem za iznos', () {
+      const epsEmptyAmountText = '''
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+ДР ИВАНА РИБАРА 88/24
+11073 БЕОГРАД
+
+Сврха уплате:
+Уплата по рачуну
+
+Прималац:
+ЕПС АД Београд
+11000 Београд
+
+Шиф. плаћ.  Валута   Износ
+189         РСД
+
+Шиф. ком.   Текући рачун примаоца
+114         200-75409-96
+
+Број модела     Позив на broj
+97              14-02004377503-2610
+''';
+      final data = tryParseInvoiceText(epsEmptyAmountText);
+      expect(data, isNotNull);
+      expect(data!.amount, 0.0);
+      expect(data.accountNumber, '200000000007540996');
+      expect(data.recipientName, contains('EPS AD Beograd'));
+      expect(data.referenceNumber, contains('14020043775032610'));
+    });
+
+    test(
+      'uspešno procesira stvarni ML Kit Latin OCR izlaz za ćiriličnu EPS uplatnicu',
+      () {
+        const mlKitCyrillicAsLatin = '''
+NnaTnay:
+AHTOHMJEBMH MBAH
+AP VBAHA PMBAPA 88/24, cn. 6;
+5EOrPAN - HOBM BEOrPAN
+11073 BEOrPAA 129
+CBpxa ynnate:
+Ynnata no pa4yHy
+IpuManaų:
+EnC AA Beorpan
+11000 5eorpan
+Wu. nnah.
+189
+Wn. KOM.
+114
+Bpoj MOgena
+97
+Banyta
+PCA
+M3HOC
+Tekyħu payyH npMMaoya
+200-75409-96
+No3MB Ha őpoj
+|14-02004377503-2610
+Wu. nnah.
+189
+Lvo. KOM.
+114
+Gpoj MOgena
+97
+NnaTunaų:
+Banyta
+PCA
+Tekyħu payyH npMMaOja
+|200-75409-96
+M3HOC
+lo3MB Ha őpoj
+14-02004377503-2610
+|AHTOHVMJEBAH MBAH
+AP MBAHA PMBAPA 88/24, cn. 6
+BEOrPAg - HOBM 5EOrPAA
+|11073 BEOrPAA 129
+''';
+        final data = tryParseInvoiceText(mlKitCyrillicAsLatin);
+        expect(data, isNotNull);
+        expect(data!.amount, 0.0);
+        expect(data.accountNumber, '200000000007540996');
+        expect(data.recipientName, contains('EPS AD Beograd'));
+        expect(data.purpose, 'Uplata po računu');
+        expect(data.paymentCode, '289');
+        expect(data.referenceNumber, '9714020043775032610');
+      },
+    );
 
     test('uspešno izvlači ćirilični EPS račun sa "Уплатом од... попуста"', () {
       const cyrillicEps = '''

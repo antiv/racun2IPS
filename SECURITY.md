@@ -6,11 +6,11 @@ User data security and privacy are fundamental principles in **Invoice2IPS**.
 
 ## Privacy by Design
 
-- **Zero telemetry/tracking**: The app does not collect user data or transmit information to proprietary backend servers.
+- **Zero telemetry/tracking**: The app does not collect user analytics, advertising IDs, or profile data.
 - **On-device extraction**:
   - Existing NBS IPS QR codes are scanned and decoded **100% locally on the device**.
   - Local OCR and payment slip parsing run **entirely on-device** using Google ML Kit.
-- **Controlled cloud fallback**: Only when local deterministic methods fail (unclear images, non-standard layout, or handwriting) is the document sent to the Google Gemini API solely for structured data extraction.
+- **Controlled AI fallback**: Only when local deterministic methods fail (unclear images, non-standard layout, or handwriting) is the document sent over HTTPS to the MATE AI extraction service (`ai.antonijevic.rs`) solely for structured payment field extraction.
 - **Local storage**: All saved templates, payment history, and user codes are stored exclusively in the device's local sandboxed storage (`SharedPreferences`).
 
 ---

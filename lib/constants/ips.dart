@@ -1,6 +1,3 @@
-/// Gemini model za ekstrakciju podataka sa računa.
-const geminiModel = 'gemini-3-flash-preview';
-
 /// NBS IPS QR limiti po zvaničnoj specifikaciji (feb 2023).
 class IpsLimits {
   IpsLimits._();
