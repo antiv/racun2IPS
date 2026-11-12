@@ -222,158 +222,11 @@ class MainActivity : FlutterActivity() {
                 bmp.recycle()
                 bmp = argb
             }
-            removeFormLines(bmp)
             bmp
         } catch (e: Throwable) {
             android.util.Log.e("Invoice2IPS", "decodeUprightBitmap error: $e", e)
             null
         }
-    }
-
-    /**
-     * Uklanja tanke horizontalne i vertikalne linije okvira (tabelarnih ćelija i boksova
-     * uplatnice) kako Tesseract ne bi spojio okvir boksa sa tekstom unutar njega,
-     * pri čemu čuva sve piksele slova čak i kada dodiruju liniju okvira.
-     */
-    private fun removeFormLines(bmp: Bitmap) {
-        val w = bmp.width
-        val h = bmp.height
-        if (w < 100 || h < 100) return
-
-        val pixels = IntArray(w * h)
-        bmp.getPixels(pixels, 0, w, 0, 0, w, h)
-
-        val lum = IntArray(w * h)
-        for (i in pixels.indices) {
-            val c = pixels[i]
-            val r = (c shr 16) and 0xFF
-            val g = (c shr 8) and 0xFF
-            val b = c and 0xFF
-            lum[i] = (r * 77 + g * 150 + b * 29) shr 8
-        }
-
-        val scale = max(w, h) / 2000f
-        val maxThick = (5f * scale).roundToInt().coerceIn(3, 7)
-        val minHorizRun = (48f * scale).roundToInt().coerceAtLeast(35)
-        val minVertRun = (36f * scale).roundToInt().coerceAtLeast(28)
-        val maxGap = (6f * scale).roundToInt().coerceIn(3, 8)
-        val contrast = 22
-
-        val rowBg = IntArray(w)
-        for (y in maxThick until (h - maxThick)) {
-            val rowOffset = y * w
-            var runStart = -1
-            var runLen = 0
-            var gapCount = 0
-
-            for (x in 0 until w) {
-                val idx = rowOffset + x
-                val l = lum[idx]
-                var maxAbove = 0
-                var maxBelow = 0
-                for (d in 1..maxThick) {
-                    val la = lum[(y - d) * w + x]
-                    if (la > maxAbove) maxAbove = la
-                    val lb = lum[(y + d) * w + x]
-                    if (lb > maxBelow) maxBelow = lb
-                }
-                val isThinDark = (maxAbove - l >= contrast) && (maxBelow - l >= contrast)
-                if (isThinDark) {
-                    if (runStart < 0) runStart = x
-                    runLen++
-                    gapCount = 0
-                    rowBg[x] = (maxAbove + maxBelow) shr 1
-                } else {
-                    rowBg[x] = 0
-                    if (runStart >= 0 && l < 180 && gapCount < maxGap) {
-                        runLen++
-                        gapCount++
-                    } else {
-                        if (runLen >= minHorizRun) {
-                            for (kx in runStart until (x - gapCount)) {
-                                val bg = rowBg[kx]
-                                if (bg > 0) {
-                                    val v = bg.coerceIn(225, 255)
-                                    pixels[rowOffset + kx] =
-                                        (0xFF shl 24) or (v shl 16) or (v shl 8) or v
-                                }
-                            }
-                        }
-                        runStart = -1
-                        runLen = 0
-                        gapCount = 0
-                    }
-                }
-            }
-            if (runLen >= minHorizRun && runStart >= 0) {
-                for (kx in runStart until (w - gapCount)) {
-                    val bg = rowBg[kx]
-                    if (bg > 0) {
-                        val v = bg.coerceIn(225, 255)
-                        pixels[rowOffset + kx] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
-                    }
-                }
-            }
-        }
-
-        val colBg = IntArray(h)
-        for (x in maxThick until (w - maxThick)) {
-            var runStart = -1
-            var runLen = 0
-            var gapCount = 0
-
-            for (y in 0 until h) {
-                val rowOff = y * w
-                val idx = rowOff + x
-                val l = lum[idx]
-                var maxLeft = 0
-                var maxRight = 0
-                for (d in 1..maxThick) {
-                    val ll = lum[rowOff + x - d]
-                    if (ll > maxLeft) maxLeft = ll
-                    val lr = lum[rowOff + x + d]
-                    if (lr > maxRight) maxRight = lr
-                }
-                val isThinDark = (maxLeft - l >= contrast) && (maxRight - l >= contrast)
-                if (isThinDark) {
-                    if (runStart < 0) runStart = y
-                    runLen++
-                    gapCount = 0
-                    colBg[y] = (maxLeft + maxRight) shr 1
-                } else {
-                    colBg[y] = 0
-                    if (runStart >= 0 && l < 180 && gapCount < maxGap) {
-                        runLen++
-                        gapCount++
-                    } else {
-                        if (runLen >= minVertRun) {
-                            for (ky in runStart until (y - gapCount)) {
-                                val bg = colBg[ky]
-                                if (bg > 0) {
-                                    val v = bg.coerceIn(225, 255)
-                                    pixels[ky * w + x] =
-                                        (0xFF shl 24) or (v shl 16) or (v shl 8) or v
-                                }
-                            }
-                        }
-                        runStart = -1
-                        runLen = 0
-                        gapCount = 0
-                    }
-                }
-            }
-            if (runLen >= minVertRun && runStart >= 0) {
-                for (ky in runStart until (h - gapCount)) {
-                    val bg = colBg[ky]
-                    if (bg > 0) {
-                        val v = bg.coerceIn(225, 255)
-                        pixels[ky * w + x] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
-                    }
-                }
-            }
-        }
-
-        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
     }
 
     /**
@@ -395,7 +248,7 @@ class MainActivity : FlutterActivity() {
                 if (!initialized) {
                     return null
                 }
-                tess.pageSegMode = TessBaseAPI.PageSegMode.PSM_SPARSE_TEXT
+                tess.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
                 tess.setImage(bitmap)
 
                 val fullText = tess.utF8Text ?: ""

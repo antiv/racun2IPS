@@ -165,7 +165,7 @@ InvoiceData? tryParseInvoiceText(
       .replaceAll('\r', '\n');
   final lines = normalizedText
       .split('\n')
-      .map((l) => l.replaceAll(RegExp(r'[|\[\]]'), ' ').trim())
+      .map((l) => l.replaceAll(RegExp(r'[|\[\]_~]'), ' ').trim())
       .where((l) => l.isNotEmpty)
       .toList();
   if (lines.isEmpty) return null;
@@ -179,7 +179,7 @@ InvoiceData? tryParseInvoiceText(
   final horizontalLines = horizontalLatin != null
       ? horizontalLatin
             .split('\n')
-            .map((l) => l.replaceAll(RegExp(r'[|\[\]]'), ' ').trim())
+            .map((l) => l.replaceAll(RegExp(r'[|\[\]_~]'), ' ').trim())
             .where((l) => l.isNotEmpty)
             .toList()
       : const <String>[];
@@ -309,11 +309,11 @@ double? _extractAmount(String fullText, List<String> lines) {
   final candidates = <_ScoredCandidate<double>>[];
 
   // Srpski format iznosa sa 2 decimale: npr. = 1.234,56 ili 12.345,67 ili 450,00
-  // (ili 3.522.54 kada OCR pročita decimalni zarez kao tačku).
+  // (ili 3.522.54 ili 3522. 54 kada OCR pročita decimalni zarez kao tačku sa razmakom).
   // Lookaround sprečava da se deo datuma ("21.10.2026" → 21,10), dužeg broja,
   // negativna vrednost ("-24,62") ili procenat ("77,06 %") pročita kao iznos.
   final amountRegex = RegExp(
-    r'(?:=\s*)?(?<![\d.,\-])(\d{1,3}(?:[.\s]\d{3})+[.,]\d{2}|\d+[.,]\d{2})(?![.,]?\d|\s*%)',
+    r'(?:=\s*)?(?<![\d.,\-])(\d{1,3}(?:[.\s]\d{3})+\s*[.,]\s*\d{2}|\d+\s*[.,]\s*\d{2})(?![.,]?\d|\s*%)',
   );
 
   for (var i = 0; i < lines.length; i++) {

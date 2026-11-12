@@ -18,7 +18,11 @@ Needs: pip3 install google-api-python-client google-auth
 import argparse
 import json
 import os
+import socket
 import sys
+
+# Set generous socket timeout for 100MB+ bundle uploads
+socket.setdefaulttimeout(300)
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
