@@ -108,7 +108,7 @@ class LocalOcrService {
       );
     }
     return [
-      for (final angle in const [90, 270, 180])
+      for (final angle in const [90, 270])
         img.encodeJpg(img.copyRotate(upright, angle: angle), quality: 92),
     ];
   }
@@ -118,108 +118,64 @@ class LocalOcrService {
     String filePath,
   ) async {
     try {
-      // Na iOS-u ugrađeni Apple Vision (VNRecognizeTextRequest) nativno čita
-      // i ćirilicu i latinicu (~300ms), pa ga pokrećemo prvog.
-      if (Platform.isIOS) {
-        final visionOcr = await recognizeTextNative(filePath);
-        InvoiceData? visionData;
-        if (visionOcr != null) {
+      // 1. Pokrećemo nativni OCR koji na sistemu ima model za ćirilicu:
+      //    - Na Androidu: Tesseract 4 LSTM sa srpskim ćiriličnim modelom (`srp.traineddata`)
+      //    - Na iOS-u: Apple Vision (`VNRecognizeTextRequest` sa ćirilicom i latinicom)
+      final nativeOcr = await recognizeTextNative(filePath);
+
+      // Brojimo ćirilična slova srpske azbuke u nativnom OCR tekstu.
+      final cyrillicRegex = RegExp(r'[А-Яа-яЂђЈјЉљЊњЋћЏџ]');
+      final cyrillicCount = nativeOcr != null
+          ? cyrillicRegex.allMatches(nativeOcr.text).length
+          : 0;
+      final isCyrillic = cyrillicCount >= 8;
+
+      if (isCyrillic && nativeOcr != null) {
+        debugPrint(
+          'LocalOcrService: Prepoznata ćirilica ($cyrillicCount slova) — koristim ćirilični OCR za CELU sliku (${nativeOcr.text.length} karaktera, ${nativeOcr.lines.length} segmenata)',
+        );
+        // ĆIRILIČNI OCR ZA CELU SLIKU:
+        // Sva polja (primalac, svrha, račun, poziv na broj, iznos) se parsiraju
+        // isključivo iz ćiriličnog OCR modela. Nema mešanja sa ML Kit-om.
+        final cyrillicData = _parseFromOcrOutput(nativeOcr.text, nativeOcr.lines);
+        if (cyrillicData != null) {
           debugPrint(
-            'LocalOcrService (iOS Vision): prepoznato ${visionOcr.text.length} karaktera',
+            'LocalOcrService (Ćirilica): Uspešno prepoznat primalac "${cyrillicData.recipientName}", račun: ${cyrillicData.accountNumber}, iznos: ${cyrillicData.amount}, poziv: ${cyrillicData.referenceNumber}',
           );
-          visionData = _parseFromOcrOutput(visionOcr.text, visionOcr.lines);
-          if (visionData != null &&
-              visionData.amount > 0 &&
-              visionData.referenceNumber.isNotEmpty) {
-            return visionData;
-          }
+          return cyrillicData;
         }
 
-        final inputImage = InputImage.fromFilePath(filePath);
-        final recognized = await recognizer.processImage(inputImage);
-        final mlLines = _linesFromMlKit(recognized);
-        final mlData = _parseFromOcrOutput(recognized.text, mlLines);
-
-        return _mergeOcrResults(
-          primary: visionData,
-          secondary: mlData,
-          primaryOcr: visionOcr,
-          secondaryText: recognized.text,
-          secondaryLines: mlLines,
+        // Ako ćirilični model nije uspeo da izvuče validne podatke (npr. mutna slika,
+        // nečitak račun), NIKADA ne podmećemo ML Kit latinične greške,
+        // već vraćamo null kako bi se aktivirao MATE AI fallback.
+        debugPrint(
+          'LocalOcrService: Ćirilični račun nije prošao lokalnu validaciju -> AI fallback',
         );
+        return null;
       }
 
-      // Na Androidu prvo pokrećemo brzi ML Kit (za latinične račune i cifre).
+      // 2. Dokument je na latinici (npr. račun SBB, Yettel, A1, Infostan na latinici):
+      // Na iOS-u Apple Vision čita i latinicu, pa ga prvo proveravamo.
+      if (Platform.isIOS && nativeOcr != null) {
+        final visionLatinData = _parseFromOcrOutput(nativeOcr.text, nativeOcr.lines);
+        if (visionLatinData != null && visionLatinData.referenceNumber.isNotEmpty) {
+          return visionLatinData;
+        }
+      }
+
+      // Za latinične račune na Androidu (ili dopunu na iOS-u) pokrećemo ML Kit.
       final inputImage = InputImage.fromFilePath(filePath);
       final recognized = await recognizer.processImage(inputImage);
       final mlLines = _linesFromMlKit(recognized);
       debugPrint(
-        'LocalOcrService (ML Kit): prepoznato ${recognized.text.length} karaktera teksta',
+        'LocalOcrService (ML Kit - latinica): prepoznato ${recognized.text.length} karaktera teksta',
       );
 
-      final isGenuineLatin = _hasGenuineLatinLabels(recognized.text);
-      final mlData = _parseFromOcrOutput(recognized.text, mlLines);
-
-      // Ako je račun na latinici i ML Kit je izvukao podatke, vraćamo odmah.
-      if (isGenuineLatin && mlData != null) {
-        return mlData;
-      }
-
-      // Za ćirilične račune (ili kada ML Kit nije izvukao potpune podatke),
-      // pokrećemo nativni Tesseract 4 sa srpskim ćiriličnim modelom (`srp.traineddata`).
-      final tessOcr = await recognizeTextNative(filePath);
-      if (tessOcr == null) {
-        return isGenuineLatin ? mlData : null;
-      }
-      debugPrint(
-        'LocalOcrService (Tesseract srp): prepoznato ${tessOcr.text.length} karaktera ćirilice (${tessOcr.lines.length} segmenata)',
-      );
-      final tessData = _parseFromOcrOutput(tessOcr.text, tessOcr.lines);
-
-      return _mergeOcrResults(
-        primary: isGenuineLatin ? mlData : tessData,
-        secondary: isGenuineLatin ? tessData : mlData,
-        primaryOcr: tessOcr,
-        secondaryText: recognized.text,
-        secondaryLines: mlLines,
-      );
+      return _parseFromOcrOutput(recognized.text, mlLines);
     } catch (e) {
       debugPrint('LocalOcrService processImage error: $e');
       return null;
     }
-  }
-
-  /// Proverava da li sirovi tekst iz ML Kit-a zaista sadrži latinične labele
-  /// uplatnice/računa. Ako ne sadrži, dokument je na ćirilici pa se pokreće
-  /// nativni ćirilični OCR (Tesseract/Vision).
-  bool _hasGenuineLatinLabels(String rawText) {
-    final lower = rawText.toLowerCase();
-    var hits = 0;
-    const latinMarkers = [
-      'primalac',
-      'platilac',
-      'uplatilac',
-      'svrha uplate',
-      'svrha plaćanja',
-      'svrha placanja',
-      'račun primaoca',
-      'racun primaoca',
-      'tekući račun',
-      'tekuci racun',
-      'poziv na broj',
-      'broj modela',
-      'šifra plaćanja',
-      'sifra placanja',
-      'ukupno za uplatu',
-      'za uplatu',
-      'nalog za uplatu',
-    ];
-    for (final marker in latinMarkers) {
-      if (lower.contains(marker)) {
-        hits++;
-      }
-    }
-    return hits >= 2;
   }
 
   List<NativeOcrLine> _linesFromMlKit(RecognizedText recognized) {
@@ -293,52 +249,7 @@ class LocalOcrService {
     return base;
   }
 
-  /// Spaja rezultate ćiriličnog OCR-a (`primary`) i ML Kit-a (`secondary`),
-  /// tako da ćirilični OCR daje tačne nazive primaoca i svrhe uplate za bilo koje
-  /// preduzeće na ćirilici, a po potrebi dopunjuje cifre (račun, poziv na broj, iznos).
-  InvoiceData? _mergeOcrResults({
-    required InvoiceData? primary,
-    required InvoiceData? secondary,
-    required NativeOcrResult? primaryOcr,
-    required String secondaryText,
-    required List<NativeOcrLine> secondaryLines,
-  }) {
-    if (primary != null && secondary != null) {
-      if (primary.accountNumber == secondary.accountNumber) {
-        if (primary.amount <= 0 && secondary.amount > 0) {
-          primary.amount = secondary.amount;
-        }
-        if (primary.referenceNumber.isEmpty &&
-            secondary.referenceNumber.isNotEmpty) {
-          primary.referenceNumber = secondary.referenceNumber;
-        }
-      }
-      return primary;
-    }
 
-    // Ako jedan motor nije samostalno prošao sve provere (npr. Tesseract je
-    // pročitao ćiriličnog primaoca i svrhu uplate, dok je ML Kit bolje pročitao
-    // sitan 18-cifreni račun ili poziv na broj), spoji njihove rekonstruisane tekstove.
-    if (primaryOcr != null && secondaryText.trim().isNotEmpty) {
-      final combinedColumnAndRow = [
-        _buildColumnTrackText(primaryOcr.lines),
-        _buildHorizontalRowText(primaryOcr.lines),
-        _buildHorizontalRowText(secondaryLines),
-        secondaryText,
-      ].where((s) => s.trim().isNotEmpty).join('\n');
-
-      final combined = tryParseInvoiceText(combinedColumnAndRow);
-      if (combined != null) {
-        if (primary != null) {
-          combined.recipientName = primary.recipientName;
-          combined.purpose = primary.purpose;
-        }
-        return combined;
-      }
-    }
-
-    return primary ?? secondary;
-  }
 
   /// Geometrijski grupiše linije u vertikalne kolone (stupce) na osnovu
   /// horizontalnog preklapanja X-opsega, bez ikakvih fiksnih konstanti podele ekrana.
