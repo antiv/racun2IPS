@@ -198,6 +198,31 @@ Račun primaoca: 840-0000711171843-84
     );
 
     test(
+      'generički prepoznaje ključne reči i fraze bez obzira na proizvoljne simbole, okvire i linije tabela',
+      () {
+        const textWithArbitrarySymbols = '''
+ПЛАТИЛАЦ: === ИВАН АНТОНИЈЕВИЋ ===
+БЕОГРАД
+*** Шиф. плаћ. 189 *** Валута РСД *** Износ ***
+Текући рачун примаоца: 200-75409-96
+Број модела 97 | Позив на број: 14-02004377503-2610
+Сврха уплате: /// Уплата по рачуну ///
+Прималац: [ЕПС АД Београд]
+11000 Београд
+Рачун за електричну енергију - ОКТОБАР 2026.
+~~~ 8 __ЗА_УПЛАТУ___ЗА_ЕЛЕКТРИЧНУ_ЕНЕРГИЈУ ~~~
+АКНАДЕ И ПОРЕЗЕ (А+6) 3522. 54 |
+''';
+        final data = tryParseInvoiceText(textWithArbitrarySymbols);
+        expect(data, isNotNull);
+        expect(data!.amount, closeTo(3522.54, 0.001));
+        expect(data.accountNumber, '200000000007540996');
+        expect(data.recipientName, 'EPS AD Beograd');
+        expect(data.referenceNumber, '9714020043775032610');
+      },
+    );
+
+    test(
       'uspešno prepoznaje iznos sa razmakom posle tačke/zareza iz OCR kamere (npr. "3522. 54")',
       () {
         const ocrCameraText = '''

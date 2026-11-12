@@ -165,7 +165,7 @@ InvoiceData? tryParseInvoiceText(
       .replaceAll('\r', '\n');
   final lines = normalizedText
       .split('\n')
-      .map((l) => l.replaceAll(RegExp(r'[|\[\]_~]'), ' ').trim())
+      .map((l) => l.trim())
       .where((l) => l.isNotEmpty)
       .toList();
   if (lines.isEmpty) return null;
@@ -179,7 +179,7 @@ InvoiceData? tryParseInvoiceText(
   final horizontalLines = horizontalLatin != null
       ? horizontalLatin
             .split('\n')
-            .map((l) => l.replaceAll(RegExp(r'[|\[\]_~]'), ' ').trim())
+            .map((l) => l.trim())
             .where((l) => l.isNotEmpty)
             .toList()
       : const <String>[];
@@ -653,7 +653,7 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
       if (inline.length >= 3 &&
           inline.toLowerCase() != leftCell.toLowerCase() &&
           !_isLabelOrNoise(inline)) {
-        return inline;
+        return _cleanEntityName(inline);
       }
 
       // Naziv je u sledećim linijama ispod labele "Primalac".
@@ -667,13 +667,14 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
         }
       }
       if (candidates.isNotEmpty) {
-        return candidates.firstWhere(
+        final chosen = candidates.firstWhere(
           _entityRegex.hasMatch,
           orElse: () => candidates.firstWhere(
             (c) => !RegExp(r'\d').hasMatch(c),
             orElse: () => candidates.first,
           ),
         );
+        return _cleanEntityName(chosen);
       }
     }
   }
@@ -714,7 +715,7 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
             : '';
         if (postalCityRegex.hasMatch(nextLine) ||
             _entityRegex.hasMatch(candidate)) {
-          return candidate;
+          return _cleanEntityName(candidate);
         }
       }
     }
@@ -727,7 +728,7 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
         candidate.length >= 4 &&
         candidate.length <= 80 &&
         !_isLabelOrNoise(candidate)) {
-      return candidate;
+      return _cleanEntityName(candidate);
     }
   }
 
@@ -753,12 +754,12 @@ String? _extractPurpose(List<String> lines) {
       if (inline.length >= 3 &&
           inline.toLowerCase() != leftCell.toLowerCase() &&
           !_isLabelOrNoise(inline)) {
-        return inline;
+        return _cleanEntityName(inline);
       }
       for (var offset = 1; offset <= 4 && i + offset < lines.length; offset++) {
         final next = lines[i + offset].split('   ').first.trim();
         if (next.length >= 3 && !_isLabelOrNoise(next)) {
-          return next;
+          return _cleanEntityName(next);
         }
       }
     }
@@ -825,11 +826,11 @@ bool _isLabelOrNoise(String text) {
     return true;
   }
   if (_containsAny(lower, const [
-    'šif. pla',
-    'sif. pla',
-    'šif. kom',
-    'sif. kom',
-    'f. kom',
+    'šif. pla.',
+    'sif. pla.',
+    'šif. kom.',
+    'sif. kom.',
+    'f. kom.',
     'šifra plaćanja',
     'sifra placanja',
     'tekući račun',
@@ -863,10 +864,31 @@ bool _isLabelOrNoise(String text) {
 }
 
 bool _containsAny(String haystack, List<String> needles) {
+  final normHaystack = ' ${_normalizeWords(haystack)} ';
   for (final n in needles) {
-    if (haystack.contains(n)) return true;
+    final normNeedle = _normalizeWords(n);
+    if (normNeedle.isEmpty) continue;
+    final isAbbreviation = n.trimRight().endsWith('.');
+    final target = isAbbreviation ? ' $normNeedle' : ' $normNeedle ';
+    if (normHaystack.contains(target)) return true;
   }
   return false;
+}
+
+String _normalizeWords(String text) {
+  return text
+      .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), ' ')
+      .toLowerCase()
+      .trim();
+}
+
+String _cleanEntityName(String text) {
+  return text
+      .replaceAll(
+        RegExp(r'^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$', unicode: true),
+        '',
+      )
+      .trim();
 }
 
 class _ScoredCandidate<T> {

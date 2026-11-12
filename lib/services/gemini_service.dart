@@ -108,9 +108,9 @@ Future<InvoiceData> _callMate({
 
   final dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 20),
-      sendTimeout: const Duration(seconds: 35),
-      receiveTimeout: const Duration(seconds: 60),
+      connectTimeout: const Duration(seconds: 45),
+      sendTimeout: const Duration(seconds: 90),
+      receiveTimeout: const Duration(seconds: 180),
     ),
   );
 
@@ -149,6 +149,11 @@ ${jsonEncode(_invoiceJsonSchema)}
   } on DioException catch (e) {
     if (e.response?.statusCode == 429) {
       throw Exception('Quota exceeded (429)');
+    }
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      throw Exception('MATE AI server nije odgovorio na vreme (timeout).');
     }
     final data = e.response?.data;
     if (data is Map) {
