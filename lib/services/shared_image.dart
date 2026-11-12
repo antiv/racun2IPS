@@ -102,3 +102,68 @@ Future<List<String>> extractPdfText(Uint8List pdfBytes) async {
     return const [];
   }
 }
+
+class NativeOcrLine {
+  const NativeOcrLine({
+    required this.text,
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
+  });
+
+  final String text;
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
+}
+
+class NativeOcrResult {
+  const NativeOcrResult({required this.text, required this.lines});
+
+  final String text;
+  final List<NativeOcrLine> lines;
+}
+
+/// Pokreće nativni ćirilični/višejezični OCR nad fajlom slike na putanji [filePath]:
+/// - na Androidu: Tesseract 4 LSTM sa srpskim ćiriličnim modelom (`srp.traineddata`),
+/// - na iOS-u: ugrađeni Apple Vision (`VNRecognizeTextRequest` sa ćirilicom i latinicom).
+Future<NativeOcrResult?> recognizeTextNative(String filePath) async {
+  try {
+    final raw = await _channel.invokeMethod<dynamic>('recognizeTextNative', {
+      'path': filePath,
+    });
+    if (raw is! Map) return null;
+    final text = raw['text']?.toString() ?? '';
+    final rawLines = raw['lines'];
+    final lines = <NativeOcrLine>[];
+    if (rawLines is List) {
+      for (final item in rawLines) {
+        if (item is Map) {
+          final lineText = item['text']?.toString().trim() ?? '';
+          final left = (item['left'] as num?)?.toDouble() ?? 0.0;
+          final top = (item['top'] as num?)?.toDouble() ?? 0.0;
+          final right = (item['right'] as num?)?.toDouble() ?? 0.0;
+          final bottom = (item['bottom'] as num?)?.toDouble() ?? 0.0;
+          if (lineText.isNotEmpty) {
+            lines.add(
+              NativeOcrLine(
+                text: lineText,
+                left: left,
+                top: top,
+                right: right,
+                bottom: bottom,
+              ),
+            );
+          }
+        }
+      }
+    }
+    if (text.trim().isEmpty && lines.isEmpty) return null;
+    return NativeOcrResult(text: text, lines: lines);
+  } catch (e) {
+    debugPrint('recognizeTextNative error: $e');
+    return null;
+  }
+}

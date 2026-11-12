@@ -3,7 +3,7 @@ description: "Invoice2IPS — skeniranje računa i generisanje NBS IPS QR koda"
 publish_to: 'none'
 
 # Verzija prati Tauri projekat (invoice2ips): versionName+versionCode.
-version: 1.0.27+1000026
+version: 1.0.29+1000028
 
 environment:
   sdk: ^3.12.2
@@ -56,6 +56,7 @@ flutter:
   assets:
     - assets/icon/
     - assets/images/
+    - assets/tessdata/
 
   # Inter (OFL, assets/fonts/OFL.txt) — font iz dizajna.
   fonts:

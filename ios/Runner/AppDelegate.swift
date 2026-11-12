@@ -1,6 +1,8 @@
 import Flutter
+import ImageIO
 import PDFKit
 import UIKit
+import Vision
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -57,6 +59,21 @@ import UIKit
           let texts = Self.extractPdfText(typedData.data)
           DispatchQueue.main.async {
             result(texts)
+          }
+        }
+      case "recognizeTextNative":
+        guard
+          let args = call.arguments as? [String: Any],
+          let path = args["path"] as? String,
+          !path.isEmpty
+        else {
+          result(nil)
+          return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+          let ocrResult = Self.recognizeTextWithVision(filePath: path)
+          DispatchQueue.main.async {
+            result(ocrResult)
           }
         }
       default:
@@ -149,5 +166,82 @@ import UIKit
     }
 
     return output
+  }
+
+  /// Izvršava lokalni OCR pomoću ugrađenog Apple Vision okvira (`VNRecognizeTextRequest`),
+  /// koji nativno čita i ćirilicu i latinicu na uređaju, i vraća pun tekst i listu linija
+  /// sa koordinatama u pikselima.
+  private static func recognizeTextWithVision(filePath: String) -> [String: Any]? {
+    guard
+      let uiImage = UIImage(contentsOfFile: filePath),
+      let cgImage = uiImage.cgImage
+    else {
+      return nil
+    }
+
+    let width = Double(uiImage.size.width * uiImage.scale)
+    let height = Double(uiImage.size.height * uiImage.scale)
+    let orientation = cgOrientation(from: uiImage.imageOrientation)
+
+    var fullLines: [String] = []
+    var lines: [[String: Any]] = []
+
+    let request = VNRecognizeTextRequest { req, _ in
+      guard let observations = req.results as? [VNRecognizedTextObservation] else {
+        return
+      }
+      for obs in observations {
+        guard let topCandidate = obs.topCandidates(1).first else { continue }
+        let text = topCandidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { continue }
+        fullLines.append(text)
+        let box = obs.boundingBox
+        let left = Double(box.minX) * width
+        let right = Double(box.maxX) * width
+        let top = Double(1.0 - box.maxY) * height
+        let bottom = Double(1.0 - box.minY) * height
+        lines.append([
+          "text": text,
+          "left": left,
+          "top": top,
+          "right": right,
+          "bottom": bottom,
+        ])
+      }
+    }
+
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = true
+    if #available(iOS 16.0, *) {
+      request.automaticallyDetectsLanguage = true
+    }
+    request.recognitionLanguages = ["sr-Cyrl", "sr-Latn", "ru-RU", "uk-UA", "en-US"]
+
+    let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
+    do {
+      try handler.perform([request])
+      return [
+        "text": fullLines.joined(separator: "\n"),
+        "lines": lines,
+      ]
+    } catch {
+      return nil
+    }
+  }
+
+  private static func cgOrientation(
+    from uiOrientation: UIImage.Orientation
+  ) -> CGImagePropertyOrientation {
+    switch uiOrientation {
+    case .up: return .up
+    case .down: return .down
+    case .left: return .left
+    case .right: return .right
+    case .upMirrored: return .upMirrored
+    case .downMirrored: return .downMirrored
+    case .leftMirrored: return .leftMirrored
+    case .rightMirrored: return .rightMirrored
+    @unknown default: return .up
+    }
   }
 }

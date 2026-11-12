@@ -2,9 +2,36 @@ import '../constants/ips.dart';
 import '../models/invoice_data.dart';
 import 'ips.dart';
 
-/// Preslikava srpska ćirilična slova u latinicu (1-na-1) radi ravnopravnog
-/// heurističkog prepoznavanja ćiriličnih uplatnica (EPS, Infostan, komunalije).
+/// Preslikava ćirilična slova u latinicu (1-na-1) radi ravnopravnog
+/// prepoznavanja svih ćiriličnih uplatnica i računa. Pored standardnih 30 slova
+/// srpske azbuke (Tesseract `srp`), obuhvata i rusko/ukrajinske digrafe i slova
+/// (`нь` -> `nj`, `ль` -> `lj`, `ть` -> `ć`, `і/й` -> `j`) koje ugrađeni
+/// Apple Vision OCR ponekad koristi pri čitanju srpske ćirilice na iOS-u.
 String cyrillicToLatin(String input) {
+  var text = input;
+  const digraphs = <(String, String)>[
+    ('НЬ', 'NJ'),
+    ('Нь', 'Nj'),
+    ('нь', 'nj'),
+    ('ЛЬ', 'LJ'),
+    ('Ль', 'Lj'),
+    ('ль', 'lj'),
+    ('ТЬ', 'Ć'),
+    ('Ть', 'Ć'),
+    ('ть', 'ć'),
+    ('ТЄ', 'ĆE'),
+    ('Тє', 'Će'),
+    ('тє', 'će'),
+    ('ДЖ', 'DŽ'),
+    ('Дж', 'Dž'),
+    ('дж', 'dž'),
+  ];
+  for (final (from, to) in digraphs) {
+    if (text.contains(from)) {
+      text = text.replaceAll(from, to);
+    }
+  }
+
   const map = {
     'А': 'A',
     'Б': 'B',
@@ -12,10 +39,19 @@ String cyrillicToLatin(String input) {
     'Г': 'G',
     'Д': 'D',
     'Ђ': 'Đ',
+    'Ѓ': 'Đ',
     'Е': 'E',
+    'Ё': 'E',
+    'Э': 'E',
+    'Є': 'Je',
     'Ж': 'Ž',
     'З': 'Z',
+    'Ѕ': 'Dz',
     'И': 'I',
+    'Ы': 'I',
+    'І': 'J',
+    'Ї': 'Ji',
+    'Й': 'J',
     'Ј': 'J',
     'К': 'K',
     'Л': 'L',
@@ -29,6 +65,7 @@ String cyrillicToLatin(String input) {
     'С': 'S',
     'Т': 'T',
     'Ћ': 'Ć',
+    'Ќ': 'Ć',
     'У': 'U',
     'Ф': 'F',
     'Х': 'H',
@@ -36,16 +73,30 @@ String cyrillicToLatin(String input) {
     'Ч': 'Č',
     'Џ': 'Dž',
     'Ш': 'Š',
+    'Щ': 'Šć',
+    'Ю': 'Ju',
+    'Я': 'Ja',
+    'Ъ': '',
+    'Ь': '',
     'а': 'a',
     'б': 'b',
     'в': 'v',
     'г': 'g',
     'д': 'd',
     'ђ': 'đ',
+    'ѓ': 'đ',
     'е': 'e',
+    'ё': 'e',
+    'э': 'e',
+    'є': 'je',
     'ж': 'ž',
     'з': 'z',
+    'ѕ': 'dz',
     'и': 'i',
+    'ы': 'i',
+    'і': 'j',
+    'ї': 'ji',
+    'й': 'j',
     'ј': 'j',
     'к': 'k',
     'л': 'l',
@@ -59,6 +110,7 @@ String cyrillicToLatin(String input) {
     'с': 's',
     'т': 't',
     'ћ': 'ć',
+    'ќ': 'ć',
     'у': 'u',
     'ф': 'f',
     'х': 'h',
@@ -66,72 +118,17 @@ String cyrillicToLatin(String input) {
     'ч': 'č',
     'џ': 'dž',
     'ш': 'š',
+    'щ': 'šć',
+    'ю': 'ju',
+    'я': 'ja',
+    'ъ': '',
+    'ь': '',
   };
   final buf = StringBuffer();
-  for (var i = 0; i < input.length; i++) {
-    buf.write(map[input[i]] ?? input[i]);
+  for (var i = 0; i < text.length; i++) {
+    buf.write(map[text[i]] ?? text[i]);
   }
   return buf.toString();
-}
-
-/// Google ML Kit na uređaju poseduje samo latinični model (`TextRecognitionScript.latin`),
-/// pa ćirilične uplatnice čita kao vizuelno slična latinična slova (homoglife),
-/// npr. "Прималац:" -> "IpuManaų:", "Позив на број" -> "No3MB Ha őpoj",
-/// "ЕПС АД Београд" -> "EnC AA Beorpan". Ova funkcija normalizuje te obrasce.
-String _normalizeOcrHomoglyphs(String input) {
-  var s = input;
-  final replacements = <(RegExp, String)>[
-    (
-      RegExp(r'\b[NnIli1]na[Tt][uUiI1l]?n?a[uyųj]\s*:', caseSensitive: false),
-      'Platilac:',
-    ),
-    (
-      RegExp(r'\b[Cc]Bpxa\s+ynna[tT]e\s*:?', caseSensitive: false),
-      'Svrha uplate:',
-    ),
-    (
-      RegExp(r'\bYnnata\s+no\s+pa[4čcy]yHy\b', caseSensitive: false),
-      'Uplata po računu',
-    ),
-    (
-      RegExp(
-        r'\b[IinpN1l]p[uUiImM][Mm]ana[uyųj]\s*:',
-        caseSensitive: false,
-      ),
-      'Primalac:',
-    ),
-    (
-      RegExp(r'\b[WLШш]u[p.]*\s*nna[hħ]\.?', caseSensitive: false),
-      'Šif. plać.',
-    ),
-    (RegExp(r'\bBany[tT]a\b', caseSensitive: false), 'Valuta'),
-    (RegExp(r'\bPCA\b'), 'RSD'),
-    (RegExp(r'\b[MИI]3[HO0][OC]\b', caseSensitive: false), 'Iznos'),
-    (
-      RegExp(r'\bTeky\S+\s+pa[y4čc]y[Hh]\s+np\S+', caseSensitive: false),
-      'Tekući račun primaoca',
-    ),
-    (
-      RegExp(r'\b[BGb6]poj\s+mo[gda]ena\b', caseSensitive: false),
-      'Broj modela',
-    ),
-    (
-      RegExp(
-        r'\b[NnlI1|]*o3[MmUuI][Bb]\s+[Hh]a\s+\S*poj\b',
-        caseSensitive: false,
-      ),
-      'Poziv na broj',
-    ),
-    (RegExp(r'\bE[nN]C\s+A[ADA]\b'), 'EPS AD'),
-    (
-      RegExp(r'\b[B5b]e[oO0]rpa[ngdNADa]\b', caseSensitive: false),
-      'Beograd',
-    ),
-  ];
-  for (final (pattern, replacement) in replacements) {
-    s = s.replaceAll(pattern, replacement);
-  }
-  return s;
 }
 
 /// Heuristički parser teksta sa srpskih računa i uplatnica (za lokalni OCR i clipboard).
@@ -140,11 +137,14 @@ String _normalizeOcrHomoglyphs(String input) {
 /// 1. Broj računa (18 cifara) matematički validan po Modulo-97 algoritmu,
 /// 2. Naziv primaoca pronađen (min 3 karaktera),
 /// 3. Poziv na broj validan (posebno Modulo-97 ako je na računu detektovan model 97).
-/// Iznos ako nije pronađen u tekstu uplatnice ostaje 0 (korisnik ga unosi ručno u formi).
+/// Iznos ako nije pronađen u tekstu ostaje 0 (korisnik ga unosi ručno u formi).
 ///
 /// Ako bilo koji od obaveznih uslova nije zadovoljen, vraća `null` kako bi obrada
-/// bezbedno prešla na Gemini AI fallback.
-InvoiceData? tryParseInvoiceText(String rawText) {
+/// bezbedno prešla na AI fallback.
+InvoiceData? tryParseInvoiceText(
+  String rawText, {
+  String? horizontalRowsText,
+}) {
   if (rawText.trim().isEmpty) return null;
 
   // 0. Ako tekst već sadrži sirovi NBS IPS QR string (npr. K:PR|V:01|...), parsiraj direktno.
@@ -159,42 +159,79 @@ InvoiceData? tryParseInvoiceText(String rawText) {
     }
   }
 
-  final latinText = _normalizeOcrHomoglyphs(cyrillicToLatin(rawText));
+  final latinText = cyrillicToLatin(rawText);
   final normalizedText = latinText
       .replaceAll('\r\n', '\n')
       .replaceAll('\r', '\n');
   final lines = normalizedText
       .split('\n')
-      .map((l) => l.replaceAll('|', ' ').trim())
+      .map((l) => l.replaceAll(RegExp(r'[|\[\]]'), ' ').trim())
       .where((l) => l.isNotEmpty)
       .toList();
   if (lines.isEmpty) return null;
 
+  final horizontalLatin =
+      horizontalRowsText != null && horizontalRowsText.trim().isNotEmpty
+      ? cyrillicToLatin(
+          horizontalRowsText,
+        ).replaceAll('\r\n', '\n').replaceAll('\r', '\n')
+      : null;
+  final horizontalLines = horizontalLatin != null
+      ? horizontalLatin
+            .split('\n')
+            .map((l) => l.replaceAll(RegExp(r'[|\[\]]'), ' ').trim())
+            .where((l) => l.isNotEmpty)
+            .toList()
+      : const <String>[];
+
   // 1. Broj računa (mora proći Modulo-97).
-  final accountNumber = _extractValidAccountNumber(normalizedText, lines);
+  final accountNumber =
+      _extractValidAccountNumber(normalizedText, lines) ??
+      (horizontalLatin != null
+          ? _extractValidAccountNumber(horizontalLatin, horizontalLines)
+          : null);
   if (accountNumber == null || !validateAccountNumber(accountNumber)) {
     return null;
   }
 
   // 2. Iznos: ako je prepoznat koristi se, inače 0 (korisnik unosi u formi).
-  final rawAmount = _extractAmount(normalizedText, lines);
+  final amountLines = horizontalLines.isEmpty
+      ? lines
+      : <String>[...lines, ...horizontalLines];
+  final rawAmount = _extractAmount(normalizedText, amountLines);
   final amountResult = (rawAmount != null && rawAmount > 0) ? rawAmount : 0.0;
 
   // 3. Poziv na broj i model.
-  final refResult = _extractReferenceNumber(normalizedText, lines);
+  var refResult = _extractReferenceNumber(normalizedText, lines);
+  if ((!refResult.isReliable || refResult.value.isEmpty) &&
+      horizontalLatin != null) {
+    final horizRef = _extractReferenceNumber(horizontalLatin, horizontalLines);
+    if (horizRef.isReliable && horizRef.value.isNotEmpty) {
+      refResult = horizRef;
+    }
+  }
   if (!refResult.isReliable) {
     return null;
   }
 
   // 4. Primalac.
-  final recipientName = _extractRecipientName(lines, accountNumber);
+  final recipientName =
+      _extractRecipientName(lines, accountNumber) ??
+      (horizontalLines.isNotEmpty
+          ? _extractRecipientName(horizontalLines, accountNumber)
+          : null);
   if (recipientName == null || recipientName.trim().length < 3) {
     return null;
   }
 
   // 5. Šifra plaćanja i svrha uplate.
-  final paymentCode = _extractPaymentCode(lines);
-  final purpose = _extractPurpose(lines) ?? 'Uplata po računu';
+  final paymentCode = _extractPaymentCode(
+    horizontalLines.isEmpty ? lines : <String>[...lines, ...horizontalLines],
+  );
+  final purpose =
+      _extractPurpose(lines) ??
+      (horizontalLines.isNotEmpty ? _extractPurpose(horizontalLines) : null) ??
+      'Uplata po računu';
 
   return InvoiceData(
     recipientName: _clip(sanitizePipe(recipientName), IpsLimits.n),
@@ -241,7 +278,8 @@ String? _extractValidAccountNumber(String fullText, List<String> lines) {
           context.contains('žiro račun') ||
           context.contains('ziro racun') ||
           context.contains('uplatni račun') ||
-          context.contains('broj računa')) {
+          context.contains('broj računa') ||
+          context.contains('račun')) {
         score += 50;
       }
       if (context.contains('račun platioca') ||
@@ -270,11 +308,12 @@ String? _extractValidAccountNumber(String fullText, List<String> lines) {
 double? _extractAmount(String fullText, List<String> lines) {
   final candidates = <_ScoredCandidate<double>>[];
 
-  // Srpski format iznosa sa 2 decimale: npr. = 1.234,56 ili 12.345,67 ili 450,00.
-  // Lookaround sprečava da se deo datuma ("21.10.2026" → 21,10), dužeg broja
-  // ili negativna vrednost (procenat "-24,62") pročita kao iznos.
+  // Srpski format iznosa sa 2 decimale: npr. = 1.234,56 ili 12.345,67 ili 450,00
+  // (ili 3.522.54 kada OCR pročita decimalni zarez kao tačku).
+  // Lookaround sprečava da se deo datuma ("21.10.2026" → 21,10), dužeg broja,
+  // negativna vrednost ("-24,62") ili procenat ("77,06 %") pročita kao iznos.
   final amountRegex = RegExp(
-    r'(?:=\s*)?(?<![\d.,\-])(\d{1,3}(?:[.\s]\d{3})+,\d{2}|\d+[.,]\d{2})(?![.,]?\d)',
+    r'(?:=\s*)?(?<![\d.,\-])(\d{1,3}(?:[.\s]\d{3})+[.,]\d{2}|\d+[.,]\d{2})(?![.,]?\d|\s*%)',
   );
 
   for (var i = 0; i < lines.length; i++) {
@@ -303,7 +342,7 @@ double? _extractAmount(String fullText, List<String> lines) {
       }
 
       // Najviši prioritet: eksplicitne fraze za konačni iznos računa
-      if (_containsAny(context, const [
+      const topPhrases = [
         'ukupno za uplatu',
         'iznos za uplatu',
         'svega za uplatu',
@@ -313,8 +352,20 @@ double? _extractAmount(String fullText, List<String> lines) {
         'za placanje',
         'uplatom od',
         'uplata od',
-      ])) {
+      ];
+      final hasInlineTopPhrase = _containsAny(lower, topPhrases);
+      final isDiscountDeadline =
+          !_containsAny(lower, const ['uplatom od', 'uplata od']) &&
+          RegExp(r'za\s+uplatu\s+do\s+\d').hasMatch(context);
+
+      if (!isDiscountDeadline && _containsAny(context, topPhrases)) {
         score += 100;
+        if (hasInlineTopPhrase) {
+          score += 35;
+        }
+      } else if (_containsAny(lower, const ['ukupno']) &&
+          _containsAny(lower, const ['zaduženje', 'zaduzenje'])) {
+        score += 85;
       } else if (_containsAny(context, const [
         'iznos',
         'ukupno',
@@ -330,24 +381,25 @@ double? _extractAmount(String fullText, List<String> lines) {
       }
 
       // Negativni poeni za međuzbirove, poreze, očitanja brojila ili tarife
-      if (_containsAny(lower, const [
-            'osnovica',
-            'stopa',
-            'pdv',
-            'kamata',
-            'popust',
-            'umanjenje',
-            'kwh',
-            'm3',
-            'prethodni',
-            'pretplata',
-          ]) &&
-          !_containsAny(lower, const [
-            'za uplatu',
-            'ukupno za uplatu',
-            'uplatom od',
-            'uplata od',
-          ])) {
+      if (isDiscountDeadline ||
+          (_containsAny(lower, const [
+                'osnovica',
+                'stopa',
+                'pdv',
+                'kamata',
+                'popust',
+                'umanjenje',
+                'kwh',
+                'm3',
+                'prethodni',
+                'pretplata',
+              ]) &&
+              !_containsAny(lower, const [
+                'za uplatu',
+                'ukupno za uplatu',
+                'uplatom od',
+                'uplata od',
+              ]))) {
         score -= 60;
       }
 
@@ -369,17 +421,20 @@ double? _extractAmount(String fullText, List<String> lines) {
 }
 
 double? _parseSerbianNumber(String raw) {
-  final cleaned = raw.trim();
+  final cleaned = raw.trim().replaceAll(' ', '');
   if (cleaned.contains(',')) {
-    // Format 1.234,56 -> ukloni tačke i razmake, zameni zarez tačkom
-    final normalized = cleaned
-        .replaceAll('.', '')
-        .replaceAll(' ', '')
-        .replaceAll(',', '.');
+    // Format 1.234,56 -> ukloni tačke i zameni zarez tačkom
+    final normalized = cleaned.replaceAll('.', '').replaceAll(',', '.');
     return double.tryParse(normalized);
   } else {
-    // Format 1234.56 (samo jedna tačka i 2 decimale na kraju)
-    return double.tryParse(cleaned.replaceAll(' ', ''));
+    // Format 1234.56 ili 3.522.54 (kada OCR pročita decimalni zarez kao tačku)
+    final lastDot = cleaned.lastIndexOf('.');
+    if (lastDot > 0 && cleaned.indexOf('.') != lastDot) {
+      final intPart = cleaned.substring(0, lastDot).replaceAll('.', '');
+      final decPart = cleaned.substring(lastDot + 1);
+      return double.tryParse('$intPart.$decPart');
+    }
+    return double.tryParse(cleaned);
   }
 }
 
@@ -394,16 +449,42 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
   final lowerFull = fullText.toLowerCase();
   final mentionsRefOrModel = _containsAny(lowerFull, const [
     'poziv na broj',
+    'poziv na br',
     'odobrenje',
     'model',
   ]);
-  final mentionsModel97 = RegExp(
-    r'model[a-z\s:.\-]{0,20}\b97\b|\b97\s+\d{2}[-\s]?\d{3,}',
-    caseSensitive: false,
-  ).hasMatch(fullText);
+  final hasStandalone97 = lines.any((l) => l.trim() == '97');
+  final mentionsModel97 =
+      hasStandalone97 ||
+      RegExp(
+        r'model[a-z\s:.\-]{0,20}\b97\b|\b97\s+\d{2}[-\s]?\d{3,}',
+        caseSensitive: false,
+      ).hasMatch(fullText);
 
   // 1. Pokušaj pronalaska eksplicitnog Modela 97 + poziva na broj koji prolazi Modulo-97
   final mod97Candidates = <String>[];
+
+  void tryAddMod97Token(String rawToken, {required bool allowPrepend97}) {
+    final trimmed = rawToken.trim();
+    final cleanDigits = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanDigits.length == 18 && validateAccountNumber(cleanDigits)) {
+      return; // Preskoči 18-cifreni broj računa
+    }
+    final clean = trimmed.replaceAll(RegExp(r'[\s-]'), '').toUpperCase();
+    if (clean.startsWith('97') &&
+        clean.length >= 6 &&
+        clean.length <= IpsLimits.ro &&
+        validateReferenceNumber(clean)) {
+      mod97Candidates.add(clean);
+    } else if (allowPrepend97) {
+      final with97 = '97$clean';
+      if (with97.length >= 6 &&
+          with97.length <= IpsLimits.ro &&
+          validateReferenceNumber(with97)) {
+        mod97Candidates.add(with97);
+      }
+    }
+  }
 
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i];
@@ -417,48 +498,48 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
     );
     for (final m in mod97Regex.allMatches(combined)) {
       final tail = m.group(1)!.replaceAll(RegExp(r'[\s-]'), '').toUpperCase();
-      final fullCandidate = '97$tail';
-      final digitsOnly = fullCandidate.replaceAll(RegExp(r'[^0-9]'), '');
-      if (digitsOnly.length == 18 && validateAccountNumber(digitsOnly)) {
-        continue; // Ne mešaj 18-cifreni broj računa sa pozivom na broj
-      }
-      if (fullCandidate.length >= 6 &&
-          fullCandidate.length <= IpsLimits.ro &&
-          validateReferenceNumber(fullCandidate)) {
-        mod97Candidates.add(fullCandidate);
-      }
+      tryAddMod97Token('97$tail', allowPrepend97: false);
     }
 
-    // Ako linija spominje "poziv na broj" ili "odobrenje", proveri i vrednost bez "97" na početku
-    // kojoj dodajemo "97" ako je model 97 u posebnom boksu
+    // Ako linija spominje "poziv na broj", "model" ili "račun primaoca", proveri
+    // okolne linije (na uplatnicama je poziv na broj često odmah ispod broja računa).
     final lower = line.toLowerCase();
-    if (_containsAny(lower, const ['poziv na broj', 'odobrenje', 'model'])) {
+    if (_containsAny(lower, const [
+      'poziv na broj',
+      'poziv na br',
+      'odobrenje',
+      'model',
+      'račun primaoca',
+      'racun primaoca',
+      'tekući račun',
+      'tekuci racun',
+    ])) {
+      final startIdx = i >= 3 ? i - 3 : 0;
+      final endIdx = i + 5 < lines.length ? i + 5 : lines.length - 1;
       final window = [
-        line,
-        if (i + 1 < lines.length) lines[i + 1],
-        if (i + 2 < lines.length) lines[i + 2],
-        if (i + 3 < lines.length) lines[i + 3],
+        for (var k = startIdx; k <= endIdx; k++) lines[k],
       ].join(' ');
 
       final tokenRegex = RegExp(r'\b([0-9]{2}[-\s]?[0-9A-Z][0-9A-Z-]{3,22})\b');
       for (final m in tokenRegex.allMatches(window)) {
-        final rawToken = m.group(1)!.trim();
-        final cleanDigits = rawToken.replaceAll(RegExp(r'[^0-9]'), '');
-        if (cleanDigits.length == 18 && validateAccountNumber(cleanDigits)) {
-          continue; // Preskoči broj računa
-        }
-        final clean = rawToken.replaceAll(RegExp(r'[\s-]'), '');
-        if (clean.startsWith('97') &&
-            clean.length >= 6 &&
-            validateReferenceNumber(clean)) {
-          mod97Candidates.add(clean);
-        } else if (mentionsModel97) {
-          final with97 = '97$clean';
-          if (with97.length >= 6 &&
-              with97.length <= IpsLimits.ro &&
-              validateReferenceNumber(with97)) {
-            mod97Candidates.add(with97);
-          }
+        tryAddMod97Token(m.group(1)!, allowPrepend97: mentionsModel97);
+      }
+    }
+  }
+
+  // Fallback za Model 97: ako je na uplatnici prisutan broj 97 ili višedelni
+  // poziv sa crticama, proveri kandidate sa crticama koji matematički prolaze Modulo-97 kontrolu.
+  if (mod97Candidates.isEmpty) {
+    final dashedRefRegex = RegExp(
+      r'\b([0-9]{2}-[0-9A-Z][0-9A-Z-]{4,22})\b',
+      caseSensitive: false,
+    );
+    for (final line in lines) {
+      for (final m in dashedRefRegex.allMatches(line)) {
+        final token = m.group(1)!;
+        final hasMultipleDashes = '-'.allMatches(token).length >= 2;
+        if (mentionsModel97 || hasMultipleDashes) {
+          tryAddMod97Token(token, allowPrepend97: true);
         }
       }
     }
@@ -469,7 +550,7 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
   }
 
   // Ako račun eksplicitno zahteva Model 97, a nismo našli validan Mod97 poziv na broj,
-  // ne smemo nagađati — prepusti Gemini AI-ju.
+  // ne smemo nagađati — prepusti AI fallback-u.
   if (mentionsModel97) {
     return const _RefExtraction('', isReliable: false);
   }
@@ -477,12 +558,7 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
   // 2. Model 00 ili poziv na broj bez modela 97
   for (var i = 0; i < lines.length; i++) {
     final lower = lines[i].toLowerCase();
-    if (_containsAny(lower, const ['poziv na broj', 'odobrenje'])) {
-      // Na uplatnici je vrednost često 2-3 linije ispod labele (između su
-      // labele susednih polja, npr. "Broj modela").
-      // Ispod labele se gledaju samo redovi koji liče na vrednost (bez reči i
-      // dvotačke) — inače se pokupi broj iz rečenice, npr. svrhe uplate
-      // "Uplata po računu broj 21850/26".
+    if (_containsAny(lower, const ['poziv na broj', 'poziv na br', 'odobrenje'])) {
       final searchLines = [
         lines[i],
         for (var k = i + 1; k <= i + 3 && k < lines.length; k++)
@@ -491,7 +567,7 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
       for (final sLine in searchLines) {
         final cleanedLine = sLine.replaceFirst(
           RegExp(
-            r'^.*?(?:poziv na broj|odobrenje)\s*[():\-]*\s*',
+            r'^.*?(?:poziv na broj|poziv na br\S*|odobrenje)\s*[():\-]*\s*',
             caseSensitive: false,
           ),
           '',
@@ -514,8 +590,6 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
     }
   }
 
-  // Ako se u tekstu pominje "poziv na broj", a nismo uspeli da ga izvučemo,
-  // označavamo kao nepouzdano da bi AI preuzeo.
   if (mentionsRefOrModel) {
     return const _RefExtraction('', isReliable: false);
   }
@@ -523,13 +597,17 @@ _RefExtraction _extractReferenceNumber(String fullText, List<String> lines) {
   return const _RefExtraction('', isReliable: true);
 }
 
+final _purposeLabelRegex = RegExp(
+  r's[vuao]rha\s+(?:uplate|pla[ćc]anja)',
+  caseSensitive: false,
+);
+/// Opšte pravne forme i tipovi javnih ustanova u Srbiji (bez hardkodovanih naziva firmi).
 final _entityRegex = RegExp(
-  r'\b(J\.?K\.?P\.?|J\.?P\.?|D\.?O\.?O\.?|A\.?D\.?|EPS\s+SNABDEVANJE|ELEKTROPRIVREDA|INFOSTAN|INFORMATIKA|TELEKOM\s+SRBIJA|YETTEL|A1\s+SRBIJA|SBB\s|UPRAVA\s+ZA\s+TREZOR|PORESKA\s+UPRAVA|STAMBENA\s+ZAJEDNICA)\b',
+  r'\b(J\.?K\.?P\.?|J\.?P\.?|D\.?O\.?O\.?|A\.?D\.?|K\.?D\.?|O\.D\.|P\.R\.|AKCIONARSKO\s+DRU[ŠS]TVO|JAVNO\s+(?:KOMUNALNO\s+)?PREDUZE[ĆC]E|DRU[ŠS]TVO\s+SA\s+OGRANI[ČC]ENOM|KOMANDITNO\s+DRU[ŠS]TVO|ORTA[ČC]KO\s+DRU[ŠS]TVO|PREDUZETNIK|UPRAVA|MINISTARSTVO|USTANOVA|ZAJEDNICA|ZAVOD|FOND\b|UDRU[ŽZ]ENJE|SAVEZ)\b',
   caseSensitive: false,
 );
 
 /// Imena platioca: prva ne-labela ispod svake labele "Platilac"/"Uplatilac".
-/// OCR uplatnice po kolonama zna da ubaci platioca odmah ispod "Primalac".
 Set<String> _payerNames(List<String> lines) {
   final names = <String>{};
   for (var i = 0; i < lines.length; i++) {
@@ -538,9 +616,8 @@ Set<String> _payerNames(List<String> lines) {
       continue;
     }
     for (var k = i + 1; k <= i + 3 && k < lines.length; k++) {
-      final candidate = lines[k].trim();
+      final candidate = lines[k].split('   ').first.trim();
       final candLower = candidate.toLowerCase();
-      // Sledeća labela polja — blok platioca je prazan u ovom redosledu.
       if (candLower.endsWith(':') || candLower.startsWith('primalac')) break;
       if (_isLabelOrNoise(candidate)) continue;
       names.add(candLower);
@@ -550,7 +627,7 @@ Set<String> _payerNames(List<String> lines) {
   return names;
 }
 
-/// Izvlači naziv primaoca iz linija oko labele "Primalac" ili prepoznaje pravnu formu.
+/// Izvlači naziv primaoca iz linija oko labele "Primalac", strukture uplatnice ili pravne forme.
 String? _extractRecipientName(List<String> lines, String accountNumber) {
   final payers = _payerNames(lines);
   // 1. Traži eksplicitnu labelu "Primalac" (ali ne "Račun primaoca")
@@ -563,8 +640,8 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
             lower.contains('izdavalac')) &&
         !lower.contains('račun primaoca') &&
         !lower.contains('racun primaoca')) {
-      // Slučaj A: "Primalac: JKP Infostan tehnologije Beograd" u istoj liniji
-      final inline = line
+      final leftCell = line.split('   ').first;
+      final inline = leftCell
           .replaceFirst(
             RegExp(
               r'^.*?(?:naziv primaoca|primalac|prodavac|izdavalac(?:\s+računa)?)\s*[:\-]\s*',
@@ -574,17 +651,15 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
           )
           .trim();
       if (inline.length >= 3 &&
-          inline.toLowerCase() != line.toLowerCase() &&
+          inline.toLowerCase() != leftCell.toLowerCase() &&
           !_isLabelOrNoise(inline)) {
         return inline;
       }
 
-      // Slučaj B: Naziv je u sledećim linijama ispod labele "Primalac".
-      // Preskače se platilac; prednost ima pravno lice, pa linija bez cifara
-      // (adrese platioca/primaoca obično imaju broj).
+      // Naziv je u sledećim linijama ispod labele "Primalac".
       final candidates = <String>[];
       for (var offset = 1; offset <= 4 && i + offset < lines.length; offset++) {
-        final candidate = lines[i + offset].trim();
+        final candidate = lines[i + offset].split('   ').first.trim();
         if (candidate.length >= 3 &&
             !_isLabelOrNoise(candidate) &&
             !payers.contains(candidate.toLowerCase())) {
@@ -603,13 +678,56 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
     }
   }
 
-  // 2. Fallback: Prepoznaj liniju sa tipičnim srpskim privrednim subjektima / javnim preduzećima
+  // 2. Strukturni fallback na srpskoj uplatnici kada je sitna labela "Primalac:"
+  // oštećena na slici: u levoj koloni uplatnice polje Primalac se nalazi odmah
+  // ispod polja "Svrha uplate:" + 1 linije svrhe, i prati ga poštanski broj + mesto.
+  final postalCityRegex = RegExp(r'^\d{5}\s+[A-Za-zČĆŽŠĐčćžšđ]{3,}');
+  for (var i = 0; i < lines.length; i++) {
+    final lower = lines[i].toLowerCase();
+    if (_purposeLabelRegex.hasMatch(lower)) {
+      final leftCell = lines[i].split('   ').first;
+      final hasInlinePurpose = leftCell
+              .replaceFirst(
+                RegExp(
+                  r'^.*?s[vuao]rha\s+(?:uplate|pla[ćc]anja)\s*[:\-]?\s*',
+                  caseSensitive: false,
+                ),
+                '',
+              )
+              .trim()
+              .length >=
+          3;
+      final startOffset = hasInlinePurpose ? 1 : 2;
+      for (
+        var offset = startOffset;
+        offset <= startOffset + 3 && i + offset < lines.length;
+        offset++
+      ) {
+        final candidate = lines[i + offset].split('   ').first.trim();
+        if (_isLabelOrNoise(candidate) ||
+            payers.contains(candidate.toLowerCase()) ||
+            postalCityRegex.hasMatch(candidate)) {
+          continue;
+        }
+        final nextLine = i + offset + 1 < lines.length
+            ? lines[i + offset + 1].split('   ').first.trim()
+            : '';
+        if (postalCityRegex.hasMatch(nextLine) ||
+            _entityRegex.hasMatch(candidate)) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: Prepoznaj liniju sa opštom pravnom formom (DOO, AD, JKP, JP...)
   for (final line in lines) {
-    if (_entityRegex.hasMatch(line) &&
-        line.length >= 4 &&
-        line.length <= 80 &&
-        !_isLabelOrNoise(line)) {
-      return line;
+    final candidate = line.split('   ').first.trim();
+    if (_entityRegex.hasMatch(candidate) &&
+        candidate.length >= 4 &&
+        candidate.length <= 80 &&
+        !_isLabelOrNoise(candidate)) {
+      return candidate;
     }
   }
 
@@ -621,25 +739,24 @@ String? _extractPurpose(List<String> lines) {
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i];
     final lower = line.toLowerCase();
-    if (lower.contains('svrha uplate') ||
-        lower.contains('svrha plaćanja') ||
-        lower.contains('svrha placanja')) {
-      final inline = line
+    if (_purposeLabelRegex.hasMatch(lower)) {
+      final leftCell = line.split('   ').first;
+      final inline = leftCell
           .replaceFirst(
             RegExp(
-              r'^.*?svrha\s+(?:uplate|plaćanja|placanja)\s*[:\-]?\s*',
+              r'^.*?s[vuao]rha\s+(?:uplate|pla[ćc]anja)\s*[:\-]?\s*',
               caseSensitive: false,
             ),
             '',
           )
           .trim();
       if (inline.length >= 3 &&
-          inline.toLowerCase() != line.toLowerCase() &&
+          inline.toLowerCase() != leftCell.toLowerCase() &&
           !_isLabelOrNoise(inline)) {
         return inline;
       }
       for (var offset = 1; offset <= 4 && i + offset < lines.length; offset++) {
-        final next = lines[i + offset].trim();
+        final next = lines[i + offset].split('   ').first.trim();
         if (next.length >= 3 && !_isLabelOrNoise(next)) {
           return next;
         }
@@ -653,7 +770,10 @@ String? _extractPurpose(List<String> lines) {
 String _extractPaymentCode(List<String> lines) {
   for (var i = 0; i < lines.length; i++) {
     final lower = lines[i].toLowerCase();
-    if (lower.contains('šifra') || lower.contains('sifra')) {
+    if (lower.contains('šifra') ||
+        lower.contains('sifra') ||
+        lower.contains('šif.') ||
+        lower.contains('sif.')) {
       final window = [
         lines[i],
         if (i + 1 < lines.length) lines[i + 1],
@@ -673,6 +793,10 @@ bool _isLabelOrNoise(String text) {
   if (lower.isEmpty) return true;
   // Ako se sastoji samo od cifara, crtica i interpunkcije
   if (!RegExp(r'[a-zA-ZčćžšđČĆŽŠĐ]{2,}').hasMatch(lower)) return true;
+  // Mašinski čitljiva OCR-B linija sa dna uplatnice (više dugih nizova cifara)
+  if (RegExp(r'\d{7,}.*\d{7,}').hasMatch(lower)) return true;
+  // Polja iz desne kolone uplatnice (šifra plaćanja, šifra komitenata, model 97)
+  if (RegExp(r'^(?:189|289|114|97)\b').hasMatch(lower)) return true;
 
   const forbiddenExact = {
     'uplatilac',
@@ -694,7 +818,29 @@ bool _isLabelOrNoise(String text) {
     'pečat i potpis',
     'rsd',
   };
-  if (forbiddenExact.contains(lower)) return true;
+  if (forbiddenExact.contains(lower) ||
+      RegExp(
+        r'^s[vuao]rha\s+(?:uplate|pla[ćc]anja)\s*[:\-]?$',
+      ).hasMatch(lower)) {
+    return true;
+  }
+  if (_containsAny(lower, const [
+    'šif. pla',
+    'sif. pla',
+    'šif. kom',
+    'sif. kom',
+    'f. kom',
+    'šifra plaćanja',
+    'sifra placanja',
+    'tekući račun',
+    'tekuci racun',
+    'račun primaoca',
+    'racun primaoca',
+    'broj modela',
+    'poziv na broj',
+  ])) {
+    return true;
+  }
   if (lower.startsWith('račun primaoca') ||
       lower.startsWith('racun primaoca') ||
       lower.startsWith('poziv na broj') ||

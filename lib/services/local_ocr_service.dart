@@ -9,12 +9,17 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/invoice_data.dart';
 import '../utils/invoice_text_parser.dart';
+import 'shared_image.dart';
 
-/// Lokalni OCR servis baziran na `google_mlkit_text_recognition`.
+/// Lokalni OCR servis koji kombinuje:
+/// - `google_mlkit_text_recognition` (brzi latinični OCR i čitanje cifara),
+/// - Nativni ćirilični OCR (`recognizeTextNative`):
+///   - na Androidu: Tesseract 4 LSTM sa srpskim ćiriličnim modelom (`srp.traineddata`),
+///   - na iOS-u: Apple Vision (`VNRecognizeTextRequest` sa nativnom podrškom za ćirilicu i latinicu).
 ///
-/// Izvršava brzo čitanje teksta na samom uređaju i pokušava ekstrakciju i
+/// Izvršava čitanje teksta na samom uređaju i pokušava ekstrakciju i
 /// Modulo-97 validaciju podataka o računu. Ako podaci nisu potpuni ili ne
-/// prolaze validaciju, vraća `null` kako bi se obrada prosledila na Gemini AI.
+/// prolaze validaciju, vraća `null` kako bi se obrada prosledila na AI.
 class LocalOcrService {
   /// Pokreće lokalni OCR nad bajtovima slike i vraća [InvoiceData] samo ako
   /// izvučeni podaci prolaze strogu validaciju (Confidence Gate).
@@ -44,9 +49,9 @@ class LocalOcrService {
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final result = await _recognizeAndParse(recognizer, filePath);
-      if (result != null || !Platform.isIOS) return result;
-      // ML Kit na iOS-u (za razliku od Androida) ne čita bočno okrenut tekst,
-      // npr. uplatnicu slikanu poprečno — probaj sliku okrenutu za 90° i 270°.
+      if (result != null) return result;
+      // Ako u normalnoj orijentaciji podaci nisu izvučeni (npr. uplatnica slikana
+      // poprečno/bočno kamerom), probaj sliku okrenutu za 90° i 270°.
       return await _recognizeRotated(recognizer, filePath);
     } finally {
       await recognizer.close();
@@ -103,7 +108,7 @@ class LocalOcrService {
       );
     }
     return [
-      for (final angle in const [90, 270])
+      for (final angle in const [90, 270, 180])
         img.encodeJpg(img.copyRotate(upright, angle: angle), quality: 92),
     ];
   }
@@ -113,83 +118,417 @@ class LocalOcrService {
     String filePath,
   ) async {
     try {
+      // Na iOS-u ugrađeni Apple Vision (VNRecognizeTextRequest) nativno čita
+      // i ćirilicu i latinicu (~300ms), pa ga pokrećemo prvog.
+      if (Platform.isIOS) {
+        final visionOcr = await recognizeTextNative(filePath);
+        InvoiceData? visionData;
+        if (visionOcr != null) {
+          debugPrint(
+            'LocalOcrService (iOS Vision): prepoznato ${visionOcr.text.length} karaktera',
+          );
+          visionData = _parseFromOcrOutput(visionOcr.text, visionOcr.lines);
+          if (visionData != null &&
+              visionData.amount > 0 &&
+              visionData.referenceNumber.isNotEmpty) {
+            return visionData;
+          }
+        }
+
+        final inputImage = InputImage.fromFilePath(filePath);
+        final recognized = await recognizer.processImage(inputImage);
+        final mlLines = _linesFromMlKit(recognized);
+        final mlData = _parseFromOcrOutput(recognized.text, mlLines);
+
+        return _mergeOcrResults(
+          primary: visionData,
+          secondary: mlData,
+          primaryOcr: visionOcr,
+          secondaryText: recognized.text,
+          secondaryLines: mlLines,
+        );
+      }
+
+      // Na Androidu prvo pokrećemo brzi ML Kit (za latinične račune i cifre).
       final inputImage = InputImage.fromFilePath(filePath);
       final recognized = await recognizer.processImage(inputImage);
+      final mlLines = _linesFromMlKit(recognized);
       debugPrint(
-        'LocalOcrService: prepoznato ${recognized.text.length} karaktera teksta',
+        'LocalOcrService (ML Kit): prepoznato ${recognized.text.length} karaktera teksta',
       );
-      if (recognized.text.trim().isEmpty) return null;
 
-      // 1. Pokušaj parsiranja nad prirodnim redosledom blokova iz ML Kit-a.
-      final direct = tryParseInvoiceText(recognized.text);
-      if (direct != null) {
-        debugPrint(
-          'LocalOcrService: uspešno parsirano direktno iz blokova teksta',
-        );
-        return direct;
+      final isGenuineLatin = _hasGenuineLatinLabels(recognized.text);
+      final mlData = _parseFromOcrOutput(recognized.text, mlLines);
+
+      // Ako je račun na latinici i ML Kit je izvukao podatke, vraćamo odmah.
+      if (isGenuineLatin && mlData != null) {
+        return mlData;
       }
 
-      // 2. Na uplatnicama (dve kolone: levo Primalac/Svrha, desno Iznos/Račun/Poziv)
-      // ML Kit nekada grupiše labele i vrednosti u odvojene blokove. Rekonstruiši
-      // tekst po kolonama (leva kolona od vrha ka dnu, pa desna kolona od vrha ka dnu).
-      final columnOrdered = _buildColumnOrderedText(recognized);
-      if (columnOrdered.isNotEmpty && columnOrdered != recognized.text) {
-        final colResult = tryParseInvoiceText(columnOrdered);
-        if (colResult != null) {
-          debugPrint('LocalOcrService: uspešno parsirano iz kolona uplatnice');
-          return colResult;
-        }
+      // Za ćirilične račune (ili kada ML Kit nije izvukao potpune podatke),
+      // pokrećemo nativni Tesseract 4 sa srpskim ćiriličnim modelom (`srp.traineddata`).
+      final tessOcr = await recognizeTextNative(filePath);
+      if (tessOcr == null) {
+        return isGenuineLatin ? mlData : null;
       }
+      debugPrint(
+        'LocalOcrService (Tesseract srp): prepoznato ${tessOcr.text.length} karaktera ćirilice (${tessOcr.lines.length} segmenata)',
+      );
+      final tessData = _parseFromOcrOutput(tessOcr.text, tessOcr.lines);
 
-      return null;
+      return _mergeOcrResults(
+        primary: isGenuineLatin ? mlData : tessData,
+        secondary: isGenuineLatin ? tessData : mlData,
+        primaryOcr: tessOcr,
+        secondaryText: recognized.text,
+        secondaryLines: mlLines,
+      );
     } catch (e) {
       debugPrint('LocalOcrService processImage error: $e');
       return null;
     }
   }
 
-  /// Sortira tekstualne linije po levoj i desnoj koloni dokumenta/uplatnice,
-  /// čime se sprečava mešanje levih labela ("Primalac") sa desnim poljima ("Model").
-  String _buildColumnOrderedText(RecognizedText recognized) {
-    final allLines = <TextLine>[];
-    for (final block in recognized.blocks) {
-      allLines.addAll(block.lines);
+  /// Proverava da li sirovi tekst iz ML Kit-a zaista sadrži latinične labele
+  /// uplatnice/računa. Ako ne sadrži, dokument je na ćirilici pa se pokreće
+  /// nativni ćirilični OCR (Tesseract/Vision).
+  bool _hasGenuineLatinLabels(String rawText) {
+    final lower = rawText.toLowerCase();
+    var hits = 0;
+    const latinMarkers = [
+      'primalac',
+      'platilac',
+      'uplatilac',
+      'svrha uplate',
+      'svrha plaćanja',
+      'svrha placanja',
+      'račun primaoca',
+      'racun primaoca',
+      'tekući račun',
+      'tekuci racun',
+      'poziv na broj',
+      'broj modela',
+      'šifra plaćanja',
+      'sifra placanja',
+      'ukupno za uplatu',
+      'za uplatu',
+      'nalog za uplatu',
+    ];
+    for (final marker in latinMarkers) {
+      if (lower.contains(marker)) {
+        hits++;
+      }
     }
+    return hits >= 2;
+  }
+
+  List<NativeOcrLine> _linesFromMlKit(RecognizedText recognized) {
+    final out = <NativeOcrLine>[];
+    for (final block in recognized.blocks) {
+      for (final line in block.lines) {
+        final text = line.text.trim();
+        if (text.isEmpty) continue;
+        out.add(
+          NativeOcrLine(
+            text: text,
+            left: line.boundingBox.left,
+            top: line.boundingBox.top,
+            right: line.boundingBox.right,
+            bottom: line.boundingBox.bottom,
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
+  /// Parsira OCR izlaz koristeći geometrijsku rekonstrukciju:
+  /// 1. Vertikalni stupci (`_buildColumnTrackText`) — čuva složena polja uplatnice
+  ///    (`Platilac`, `Svrha uplate`, `Primalac`, `Račun`, `Poziv na broj`) unutar iste kolone,
+  /// 2. Prirodni redosled blokova (`fullText`),
+  /// 3. Horizontalni redovi (`_buildHorizontalRowText`) — spaja levi opis stavke u tabeli
+  ///    sa desnim iznosom na istoj Y visini i boks modela `97` sa pozivom na broj.
+  InvoiceData? _parseFromOcrOutput(
+    String fullText,
+    List<NativeOcrLine> lines,
+  ) {
+    if (fullText.trim().isEmpty && lines.isEmpty) return null;
+
+    final columnText = _buildColumnTrackText(lines);
+    final rowText = _buildHorizontalRowText(lines);
+
+    InvoiceData? colResult;
+    if (columnText.isNotEmpty) {
+      colResult = tryParseInvoiceText(
+        columnText,
+        horizontalRowsText: rowText.isNotEmpty ? rowText : null,
+      );
+    }
+
+    final direct = tryParseInvoiceText(
+      fullText,
+      horizontalRowsText: rowText.isNotEmpty ? rowText : null,
+    );
+
+    InvoiceData? rowResult;
+    if (rowText.isNotEmpty) {
+      rowResult = tryParseInvoiceText(rowText);
+    }
+
+    final base = colResult ?? direct ?? rowResult;
+    if (base == null) return null;
+
+    // Dopuni iznos ili poziv na broj iz alternativnih rasporeda ako je potrebno.
+    final extras = [rowResult, direct, colResult].whereType<InvoiceData>();
+    for (final alt in extras) {
+      if (alt.accountNumber != base.accountNumber) continue;
+      if (base.amount <= 0 && alt.amount > 0) {
+        base.amount = alt.amount;
+      }
+      if (base.referenceNumber.isEmpty && alt.referenceNumber.isNotEmpty) {
+        base.referenceNumber = alt.referenceNumber;
+      }
+    }
+
+    return base;
+  }
+
+  /// Spaja rezultate ćiriličnog OCR-a (`primary`) i ML Kit-a (`secondary`),
+  /// tako da ćirilični OCR daje tačne nazive primaoca i svrhe uplate za bilo koje
+  /// preduzeće na ćirilici, a po potrebi dopunjuje cifre (račun, poziv na broj, iznos).
+  InvoiceData? _mergeOcrResults({
+    required InvoiceData? primary,
+    required InvoiceData? secondary,
+    required NativeOcrResult? primaryOcr,
+    required String secondaryText,
+    required List<NativeOcrLine> secondaryLines,
+  }) {
+    if (primary != null && secondary != null) {
+      if (primary.accountNumber == secondary.accountNumber) {
+        if (primary.amount <= 0 && secondary.amount > 0) {
+          primary.amount = secondary.amount;
+        }
+        if (primary.referenceNumber.isEmpty &&
+            secondary.referenceNumber.isNotEmpty) {
+          primary.referenceNumber = secondary.referenceNumber;
+        }
+      }
+      return primary;
+    }
+
+    // Ako jedan motor nije samostalno prošao sve provere (npr. Tesseract je
+    // pročitao ćiriličnog primaoca i svrhu uplate, dok je ML Kit bolje pročitao
+    // sitan 18-cifreni račun ili poziv na broj), spoji njihove rekonstruisane tekstove.
+    if (primaryOcr != null && secondaryText.trim().isNotEmpty) {
+      final combinedColumnAndRow = [
+        _buildColumnTrackText(primaryOcr.lines),
+        _buildHorizontalRowText(primaryOcr.lines),
+        _buildHorizontalRowText(secondaryLines),
+        secondaryText,
+      ].where((s) => s.trim().isNotEmpty).join('\n');
+
+      final combined = tryParseInvoiceText(combinedColumnAndRow);
+      if (combined != null) {
+        if (primary != null) {
+          combined.recipientName = primary.recipientName;
+          combined.purpose = primary.purpose;
+        }
+        return combined;
+      }
+    }
+
+    return primary ?? secondary;
+  }
+
+  /// Geometrijski grupiše linije u vertikalne kolone (stupce) na osnovu
+  /// horizontalnog preklapanja X-opsega, bez ikakvih fiksnih konstanti podele ekrana.
+  /// Time svaka kolona uplatnice (leva kolona sa Platilac/Svrha/Primalac, srednja
+  /// kolona sa Šifra/Iznos/Račun/Model/Poziv i desni talon) ostaje u sopstvenom
+  /// vertikalnom toku od vrha ka dnu.
+  String _buildColumnTrackText(List<NativeOcrLine> allLines) {
     if (allLines.length < 3) return '';
 
     var minX = double.infinity;
     var maxX = double.negativeInfinity;
-    for (final line in allLines) {
-      minX = math.min(minX, line.boundingBox.left);
-      maxX = math.max(maxX, line.boundingBox.right);
+    for (final l in allLines) {
+      if (l.left < minX) minX = l.left;
+      if (l.right > maxX) maxX = l.right;
     }
-    if (!minX.isFinite || !maxX.isFinite || maxX <= minX) return '';
+    final pageW = math.max(1.0, maxX - minX);
 
-    final midX = minX + (maxX - minX) * 0.45;
-    final leftCol = <TextLine>[];
-    final rightCol = <TextLine>[];
+    final sortedByTop = List<NativeOcrLine>.of(allLines)
+      ..sort((a, b) => a.top.compareTo(b.top));
 
-    for (final line in allLines) {
-      if (line.boundingBox.left < midX) {
-        leftCol.add(line);
+    final tracks = <_VerticalTrack>[];
+
+    for (final line in sortedByTop) {
+      final lineH = math.max(1.0, line.bottom - line.top);
+      final lineW = math.max(1.0, line.right - line.left);
+      final isSpanning = lineW > pageW * 0.48;
+
+      _VerticalTrack? bestTrack;
+      var bestScore = double.negativeInfinity;
+
+      for (final track in tracks) {
+        final vGap = line.top - track.bottom;
+        if (vGap < -lineH * 0.8 || vGap > lineH * 8.5) continue;
+
+        final trackW = math.max(1.0, track.colRight - track.left);
+        final overlap =
+            math.min(track.colRight, line.right) -
+            math.max(track.left, line.left);
+        final minW = math.min(trackW, lineW);
+        final leftDiff = (line.left - track.left).abs();
+
+        if (leftDiff > math.max(lineH * 4.5, pageW * 0.14)) continue;
+
+        final hasOverlap = overlap > minW * 0.22;
+        final sharesLeftMargin =
+            leftDiff <= lineH * 1.8 &&
+            line.left <= track.colRight + lineH * 1.5;
+
+        if (!hasOverlap && !sharesLeftMargin) continue;
+
+        final score =
+            (overlap / minW) * 100.0 -
+            leftDiff * 0.5 -
+            math.max(0.0, vGap) * 0.15;
+        if (score > bestScore) {
+          bestScore = score;
+          bestTrack = track;
+        }
+      }
+
+      if (bestTrack != null) {
+        bestTrack.add(line, isSpanning: isSpanning);
       } else {
-        rightCol.add(line);
+        tracks.add(_VerticalTrack(line, isSpanning: isSpanning, pageW: pageW));
       }
     }
 
-    int compareByTop(TextLine a, TextLine b) =>
-        a.boundingBox.top.compareTo(b.boundingBox.top);
-
-    leftCol.sort(compareByTop);
-    rightCol.sort(compareByTop);
+    tracks.sort((a, b) {
+      final xCmp = a.left.compareTo(b.left);
+      return xCmp != 0 ? xCmp : a.top.compareTo(b.top);
+    });
 
     final buffer = StringBuffer();
-    for (final line in leftCol) {
-      buffer.writeln(line.text);
-    }
-    for (final line in rightCol) {
-      buffer.writeln(line.text);
+    for (final track in tracks) {
+      track.lines.sort((a, b) => a.top.compareTo(b.top));
+      for (final l in track.lines) {
+        buffer.writeln(l.text);
+      }
     }
     return buffer.toString();
+  }
+
+  /// Geometrijski spaja linije koje se nalaze na istoj horizontalnoj visini (Y)
+  /// u zajednički red (sortiran sleva nadesno). Ako se nakon numeričke kolone
+  /// (iznosa u tabeli) posle većeg horizontalnog razmaka pojavi nov tekstualni
+  /// stubac (npr. bočni tekst ili talon), prelama ga u novi red.
+  String _buildHorizontalRowText(List<NativeOcrLine> allLines) {
+    if (allLines.length < 3) return '';
+
+    double cy(NativeOcrLine l) => (l.top + l.bottom) / 2.0;
+    double height(NativeOcrLine l) => math.max(1.0, l.bottom - l.top);
+    double width(NativeOcrLine l) => math.max(1.0, l.right - l.left);
+
+    bool overlapsHorizontally(NativeOcrLine a, NativeOcrLine b) {
+      final overlap = math.min(a.right, b.right) - math.max(a.left, b.left);
+      return overlap > math.min(width(a), width(b)) * 0.25;
+    }
+
+    final sorted = List<NativeOcrLine>.of(allLines)
+      ..sort((a, b) => cy(a).compareTo(cy(b)));
+
+    final rows = <List<NativeOcrLine>>[];
+    for (final line in sorted) {
+      if (rows.isEmpty) {
+        rows.add([line]);
+        continue;
+      }
+      final prevRow = rows.last;
+      var sumCy = 0.0;
+      var sumH = 0.0;
+      for (final item in prevRow) {
+        sumCy += cy(item);
+        sumH += height(item);
+      }
+      final avgCy = sumCy / prevRow.length;
+      final avgH = sumH / prevRow.length;
+      final sameRowY =
+          (cy(line) - avgCy).abs() <= math.max(avgH, height(line)) * 0.55;
+      final hasXOverlap = prevRow.any((x) => overlapsHorizontally(line, x));
+      if (sameRowY && !hasXOverlap) {
+        prevRow.add(line);
+      } else {
+        rows.add([line]);
+      }
+    }
+
+    final hasLettersRegex = RegExp(
+      r'[A-Za-zČĆŽŠĐčćžšđА-Яа-яЂђЈјЉљЊњЋћЏџ]{2,}',
+    );
+    final endsWithAmountRegex = RegExp(r'\d+[.,]\d{2}\s*$');
+
+    final buffer = StringBuffer();
+    for (final row in rows) {
+      row.sort((a, b) => a.left.compareTo(b.left));
+      final currentLine = StringBuffer(row.first.text);
+      for (var i = 1; i < row.length; i++) {
+        final prev = row[i - 1];
+        final curr = row[i];
+        final gap = curr.left - prev.right;
+        final rowH = math.max(height(prev), height(curr));
+
+        // Ako prethodna ćelija završava decimalnim iznosom (desna ivica tabele),
+        // a sledeća ćelija posle razmaka počinje novim tekstom (susedna tabela/stubac),
+        // odvoji je novim redom umesto spajanja u isti red tabele.
+        if (gap > rowH * 1.5 &&
+            endsWithAmountRegex.hasMatch(prev.text) &&
+            hasLettersRegex.hasMatch(curr.text)) {
+          buffer.writeln(currentLine.toString());
+          currentLine
+            ..clear()
+            ..write(curr.text);
+        } else {
+          currentLine.write('   ${curr.text}');
+        }
+      }
+      buffer.writeln(currentLine.toString());
+    }
+    return buffer.toString();
+  }
+}
+
+class _VerticalTrack {
+  _VerticalTrack(
+    NativeOcrLine first, {
+    required bool isSpanning,
+    required double pageW,
+  }) : lines = [first],
+       left = first.left,
+       top = first.top,
+       right = first.right,
+       colRight = isSpanning
+           ? math.min(first.right, first.left + pageW * 0.35)
+           : first.right,
+       bottom = first.bottom;
+
+  final List<NativeOcrLine> lines;
+  double left;
+  double top;
+  double right;
+  double colRight;
+  double bottom;
+
+  void add(NativeOcrLine line, {required bool isSpanning}) {
+    lines.add(line);
+    left = math.min(left, line.left);
+    top = math.min(top, line.top);
+    right = math.max(right, line.right);
+    if (!isSpanning) {
+      colRight = math.max(colRight, line.right);
+    }
+    bottom = math.max(bottom, line.bottom);
   }
 }

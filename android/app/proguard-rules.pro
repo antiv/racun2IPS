@@ -30,3 +30,7 @@
 # pdfbox-android (opcioni JPEG2000 dekoder nije uključen)
 -dontwarn com.gemalto.jp2.JP2Decoder
 -dontwarn com.gemalto.jp2.JP2Encoder
+
+# Tesseract4Android JNI metode i povratni pozivi
+-keep class com.googlecode.tesseract.android.** { *; }
+-keep class com.googlecode.leptonica.android.** { *; }

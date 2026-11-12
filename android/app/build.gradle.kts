@@ -77,4 +77,6 @@ flutter {
 dependencies {
     // Tekstualni sloj PDF računa (Android PdfRenderer ne izvlači tekst pre API 35).
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // Lokalni Tesseract OCR sa srpskim ćiriličnim modelom (ML Kit podržava samo latinicu).
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
 }

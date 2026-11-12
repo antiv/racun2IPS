@@ -138,59 +138,119 @@ Račun primaoca: 840-0000711171843-84
     });
 
     test(
-      'uspešno procesira stvarni ML Kit Latin OCR izlaz za ćiriličnu EPS uplatnicu',
+      'uspešno procesira kompletan ćirilični račun sa tabelom, procentima i popustima',
       () {
-        const mlKitCyrillicAsLatin = '''
-NnaTnay:
-AHTOHMJEBMH MBAH
-AP VBAHA PMBAPA 88/24, cn. 6;
-5EOrPAN - HOBM BEOrPAN
-11073 BEOrPAA 129
-CBpxa ynnate:
-Ynnata no pa4yHy
-IpuManaų:
-EnC AA Beorpan
-11000 5eorpan
-Wu. nnah.
+        const cyrillicColumnText = '''
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+ДР ИВАНА РИБАРА 88/24, сп. 6;
+БЕОГРАД - НОВИ БЕОГРАД
+11073 БЕОГРАД 129
+Сврха уплате:
+Уплата по рачуну
+Прималац:
+ЕПС АД Београд
+11000 Београд
+Шиф. плаћ.
 189
-Wn. KOM.
+Валута
+РСД
+Износ
+Шиф. ком.
 114
-Bpoj MOgena
-97
-Banyta
-PCA
-M3HOC
-Tekyħu payyH npMMaoya
+Текући рачун примаоца
 200-75409-96
-No3MB Ha őpoj
-|14-02004377503-2610
-Wu. nnah.
-189
-Lvo. KOM.
-114
-Gpoj MOgena
+Број модела
 97
-NnaTunaų:
-Banyta
-PCA
-Tekyħu payyH npMMaOja
-|200-75409-96
-M3HOC
-lo3MB Ha őpoj
+Позив на број
 14-02004377503-2610
-|AHTOHVMJEBAH MBAH
-AP MBAHA PMBAPA 88/24, cn. 6
-BEOrPAg - HOBM 5EOrPAA
-|11073 BEOrPAA 129
 ''';
-        final data = tryParseInvoiceText(mlKitCyrillicAsLatin);
+        const cyrillicHorizontalRows = '''
+Одобрена снага:   17,25 kW
+Утрошено у вишој тарифи (ВТ)   178 kWh   77,06 %
+Утрошено у нижој тарифи (НТ)   53 kWh   22,94 %
+10 Основица за ПДВ (4+5+6+7+9)   2.644,62
+11 Износ ПДВ (20%)   528,92
+14 ЗАДУЖЕЊЕ ЗА ОБРАЧУНСКИ ПЕРИОД (10+11+12+13)   3.173,54
+А УКУПНО ЗАДУЖЕЊЕ ЗА ОБРАЧУНСКИ ПЕРИОД (14+15+16)   3.522,54
+17 Задужење за претходни обрачунски период   2.894,64
+18 Уплате и финансијске промене у току обрачунског периода   -2.894,64
+19.10.2026   Уплата   2.894,64
+УКУПНО   2.894,64
+Б ПРЕПЛАТА ЗА ПРЕТХОДНИ ОБРАЧУНСКИ ПЕРИОД (17+18)   0,00
+В ЗА УПЛАТУ ЗА ЕЛЕКТРИЧНУ ЕНЕРГИЈУ, НАКНАДЕ И ПОРЕЗЕ (А+Б)   3.522,54
+5%   за уплату до 28.11.2026.г.   120,97
+6%   за уплату до 20.11.2026.г. уз самоочитавање   145,17
+7%   за уплату до 20.11.2026.г. уз електронски рачун   169,36
+''';
+        final data = tryParseInvoiceText(
+          cyrillicColumnText,
+          horizontalRowsText: cyrillicHorizontalRows,
+        );
         expect(data, isNotNull);
-        expect(data!.amount, 0.0);
+        expect(data!.amount, closeTo(3522.54, 0.001));
         expect(data.accountNumber, '200000000007540996');
-        expect(data.recipientName, contains('EPS AD Beograd'));
+        expect(data.recipientName, 'EPS AD Beograd');
         expect(data.purpose, 'Uplata po računu');
         expect(data.paymentCode, '289');
         expect(data.referenceNumber, '9714020043775032610');
+      },
+    );
+
+    test(
+      'generički procesira ćirilične račune različitih izdavalaca i iOS Vision digrafe',
+      () {
+        const genericCyrillicText = '''
+Платилац:
+Марко Марковић
+Његошева 15, Нови Сад
+Сврха уплате:
+Комуналне услуге за 10/2026
+Прималац:
+ЈКП ВОДОВОД И КАНАЛИЗАЦИЈА НОВИ САД
+Масарикова 17, 21000 Нови Сад
+Шифра плаћаьа: 189
+Валута: РСД
+Износ: = 1.845,20
+Текући рачун примаоца: 840-0000711171843-84
+Број модела: 97
+Позив на број: 78-123456789
+''';
+        final data = tryParseInvoiceText(genericCyrillicText);
+        expect(data, isNotNull);
+        expect(data!.recipientName, 'JKP VODOVOD I KANALIZACIJA NOVI SAD');
+        expect(data.purpose, 'Komunalne usluge za 10/2026');
+        expect(data.accountNumber, '840000071117184384');
+        expect(data.amount, closeTo(1845.20, 0.001));
+        expect(data.paymentCode, '289');
+        expect(data.referenceNumber, '9778123456789');
+      },
+    );
+
+    test(
+      'prihvata 0 kada iznos za uplatu nije pronađen čak i kada na računu postoje drugi brojevi',
+      () {
+        const billWithOtherNumbersNoTotal = '''
+Платилац:
+Петар Петровић
+Сврха уплате:
+Уплата по рачуну
+Прималац:
+ЈП СРБИЈАГАС НОВИ САД
+Шиф. плаћ. 189   Валута РСД   Износ
+Текући рачун примаоца: 840-0000711171843-84
+Број модела: 97   Позив на број: 78-123456789
+Утрошено: 178,50 m3 (77,06 %)
+Основица за ПДВ: 2.644,62
+ПДВ (10%): 264,46
+Попуст 5% за уплату до 20.11.2026.г.: 120,97
+''';
+        final data = tryParseInvoiceText(billWithOtherNumbersNoTotal);
+        expect(data, isNotNull);
+        expect(data!.amount, 0.0);
+        expect(data.recipientName, 'JP SRBIJAGAS NOVI SAD');
+        expect(data.accountNumber, '840000071117184384');
+        expect(data.referenceNumber, '9778123456789');
       },
     );
 
