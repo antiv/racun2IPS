@@ -129,10 +129,14 @@ class NativeOcrResult {
 /// Pokreće nativni ćirilični/višejezični OCR nad fajlom slike na putanji [filePath]:
 /// - na Androidu: Tesseract 4 LSTM sa srpskim ćiriličnim modelom (`srp.traineddata`),
 /// - na iOS-u: ugrađeni Apple Vision (`VNRecognizeTextRequest` sa ćirilicom i latinicom).
-Future<NativeOcrResult?> recognizeTextNative(String filePath) async {
+Future<NativeOcrResult?> recognizeTextNative(
+  String filePath, {
+  int mode = 0,
+}) async {
   try {
     final raw = await _channel.invokeMethod<dynamic>('recognizeTextNative', {
       'path': filePath,
+      'mode': mode,
     });
     if (raw is! Map) return null;
     final text = raw['text']?.toString() ?? '';

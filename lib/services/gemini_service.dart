@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
@@ -68,11 +69,11 @@ Look for:
 Future<InvoiceData> processInvoice(Uint8List imageBytes) async {
   final mimeType = _detectMimeType(imageBytes);
   final preparedBytes = mimeType.startsWith('image/')
-      ? _ensureImageWithinLimit(imageBytes)
+      ? await _ensureImageWithinLimit(imageBytes)
       : imageBytes;
   final b64 = base64Encode(preparedBytes);
-  final effectiveMime = mimeType.startsWith('image/') &&
-          !identical(preparedBytes, imageBytes)
+  final effectiveMime =
+      mimeType.startsWith('image/') && !identical(preparedBytes, imageBytes)
       ? 'image/jpeg'
       : mimeType;
 
@@ -108,14 +109,15 @@ Future<InvoiceData> _callMate({
 
   final dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 45),
-      sendTimeout: const Duration(seconds: 90),
-      receiveTimeout: const Duration(seconds: 180),
+      connectTimeout: const Duration(seconds: 60),
+      sendTimeout: const Duration(seconds: 180),
+      receiveTimeout: const Duration(seconds: 360),
     ),
   );
 
   final sessionId = 'ips_${DateTime.now().microsecondsSinceEpoch}';
-  final sessionPrompt = '''
+  final sessionPrompt =
+      '''
 [session: $sessionId]
 $_prompt
 
@@ -138,10 +140,7 @@ ${jsonEncode(_invoiceJsonSchema)}
       data: {
         'model': _activeMateAgent,
         'messages': [
-          {
-            'role': 'user',
-            'content': contentBuilder(sessionPrompt),
-          },
+          {'role': 'user', 'content': contentBuilder(sessionPrompt)},
         ],
         'stream': false,
       },
@@ -157,7 +156,8 @@ ${jsonEncode(_invoiceJsonSchema)}
     }
     final data = e.response?.data;
     if (data is Map) {
-      final detail = data['detail'] ??
+      final detail =
+          data['detail'] ??
           (data['error'] is Map ? (data['error'] as Map)['message'] : null) ??
           e.message;
       throw Exception('MATE AI greška (${e.response?.statusCode}): $detail');
@@ -227,28 +227,33 @@ InvoiceData _mapJsonToInvoiceData(Map<String, dynamic> json) {
   return data;
 }
 
-/// Osigurava da slika ne prelazi 3.5 MB pre base64 kodiranja (MATE limit je 5 MB).
-Uint8List _ensureImageWithinLimit(Uint8List bytes) {
-  const maxRawBytes = 3500 * 1024;
+/// Smanjuje prevelike slike sa kamere (~1.2 MB+ / > 2200px) pre base64 slanja,
+/// kako upload i obrada na AI serveru ne bi izazivali timeout na mobilnoj mreži.
+Future<Uint8List> _ensureImageWithinLimit(Uint8List bytes) async {
+  const maxRawBytes = 1200 * 1024;
   if (bytes.length <= maxRawBytes) return bytes;
   try {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return bytes;
-    var processed = img.bakeOrientation(decoded);
-    final longest = math.max(processed.width, processed.height);
-    if (longest > 2200) {
-      final scale = 2200 / longest;
-      processed = img.copyResize(
-        processed,
-        width: (processed.width * scale).round(),
-        height: (processed.height * scale).round(),
-        interpolation: img.Interpolation.average,
-      );
-    }
-    return Uint8List.fromList(img.encodeJpg(processed, quality: 85));
+    return await Isolate.run(() => _shrinkImageForAi(bytes));
   } catch (_) {
     return bytes;
   }
+}
+
+Uint8List _shrinkImageForAi(Uint8List bytes) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return bytes;
+  var processed = img.bakeOrientation(decoded);
+  final longest = math.max(processed.width, processed.height);
+  if (longest > 2200) {
+    final scale = 2200 / longest;
+    processed = img.copyResize(
+      processed,
+      width: (processed.width * scale).round(),
+      height: (processed.height * scale).round(),
+      interpolation: img.Interpolation.average,
+    );
+  }
+  return Uint8List.fromList(img.encodeJpg(processed, quality: 86));
 }
 
 /// Određuje MIME tip slike ili PDF dokumenta na osnovu potpisa (magic bytes).

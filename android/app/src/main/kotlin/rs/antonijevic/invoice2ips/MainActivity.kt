@@ -25,6 +25,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -86,12 +87,13 @@ class MainActivity : FlutterActivity() {
                 }
                 "recognizeTextNative" -> {
                     val path = call.argument<String>("path")
+                    val mode = call.argument<Int>("mode") ?: 0
                     if (path.isNullOrBlank()) {
                         result.success(null)
                         return@setMethodCallHandler
                     }
                     Thread {
-                        val ocrResult = recognizeTextWithTesseract(path)
+                        val ocrResult = recognizeTextWithTesseract(path, mode)
                         runOnUiThread {
                             result.success(ocrResult)
                         }
@@ -149,11 +151,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private data class DecodedBitmap(val bitmap: Bitmap, val coordScale: Double)
+
     /**
      * Učitava sliku sa diska, primenjuje EXIF orijentaciju i skalira tako da duža
-     * strana bude između 2000px i 2400px (optimalno za sitan tekst uplatnice u Tesseract LSTM-u).
+     * strana bude između 2200px i 2800px (optimalno za sitan tekst uplatnice na celoj
+     * stranici računa u Tesseract LSTM-u), uz morfološku normalizaciju pozadine papira (`tileMax`).
+     * - `mode == 0`: `PSM_AUTO` (standardna detekcija kolona i tabela).
+     * - `mode == 1`: `PSM_SPARSE_TEXT` fallback kada `PSM_AUTO` preskoči tekst unutar
+     *   zatvorenih pravougaonih okvira (`Платилац:`, `Сврха уплате:`, `Прималац:`).
      */
-    private fun decodeUprightBitmap(filePath: String): Bitmap? {
+    private fun decodeUprightBitmap(filePath: String, mode: Int): DecodedBitmap? {
         return try {
             val boundsOpts = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
@@ -161,9 +169,10 @@ class MainActivity : FlutterActivity() {
             BitmapFactory.decodeFile(filePath, boundsOpts)
             if (boundsOpts.outWidth <= 0 || boundsOpts.outHeight <= 0) return null
 
+            val targetMax = 2800
             var sampleSize = 1
             val rawLongest = max(boundsOpts.outWidth, boundsOpts.outHeight)
-            while ((rawLongest / (sampleSize * 2)) >= 2400) {
+            while ((rawLongest / (sampleSize * 2)) >= targetMax) {
                 sampleSize *= 2
             }
 
@@ -187,6 +196,7 @@ class MainActivity : FlutterActivity() {
                 ExifInterface.ORIENTATION_ROTATE_270 -> 270f
                 else -> 0f
             }
+            val uprightRawLongest = max(boundsOpts.outWidth, boundsOpts.outHeight).toDouble()
             if (rotation != 0f) {
                 val matrix = Matrix().apply { postRotate(rotation) }
                 val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
@@ -195,8 +205,8 @@ class MainActivity : FlutterActivity() {
             }
 
             val longest = max(bmp.width, bmp.height)
-            if (longest in 1..1599) {
-                val scale = 2000f / longest.toFloat()
+            if (longest in 1..1799) {
+                val scale = 2200f / longest.toFloat()
                 val scaled = Bitmap.createScaledBitmap(
                     bmp,
                     (bmp.width * scale).roundToInt().coerceAtLeast(1),
@@ -205,8 +215,8 @@ class MainActivity : FlutterActivity() {
                 )
                 if (scaled !== bmp) bmp.recycle()
                 bmp = scaled
-            } else if (longest > 2600) {
-                val scale = 2400f / longest.toFloat()
+            } else if (longest > 3000) {
+                val scale = targetMax.toFloat() / longest.toFloat()
                 val scaled = Bitmap.createScaledBitmap(
                     bmp,
                     (bmp.width * scale).roundToInt().coerceAtLeast(1),
@@ -217,12 +227,20 @@ class MainActivity : FlutterActivity() {
                 bmp = scaled
             }
 
-            if (bmp.config != Bitmap.Config.ARGB_8888 || !bmp.isMutable) {
-                val argb = bmp.copy(Bitmap.Config.ARGB_8888, true)
+            if (mode == 0 || mode == 1) {
+                if (bmp.config != Bitmap.Config.ARGB_8888 || !bmp.isMutable) {
+                    val argb = bmp.copy(Bitmap.Config.ARGB_8888, true)
+                    bmp.recycle()
+                    bmp = argb
+                }
+                normalizePaperBackground(bmp)
+            } else if (bmp.config != Bitmap.Config.ARGB_8888) {
+                val argb = bmp.copy(Bitmap.Config.ARGB_8888, false)
                 bmp.recycle()
                 bmp = argb
             }
-            bmp
+            val finalLongest = max(bmp.width, bmp.height).coerceAtLeast(1).toDouble()
+            DecodedBitmap(bmp, uprightRawLongest / finalLongest)
         } catch (e: Throwable) {
             android.util.Log.e("Invoice2IPS", "decodeUprightBitmap error: $e", e)
             null
@@ -230,14 +248,156 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
+     * Morfološka procena osvetljenja papira po blokovima (bez uticaja tamnih linija
+     * i okvira tabela): za svaki blok od 32x32 piksela uzima se lokalni maksimum
+     * svetline papira (2x2 prosek radi potiskivanja šuma), pa se pozadina glatko
+     * interpolira. Time se uklanjaju senke na kameri bez izbeljivanja tankih slova
+     * uz ivice boksova uplatnice.
+     */
+    private fun normalizePaperBackground(bmp: Bitmap) {
+        val w = bmp.width
+        val h = bmp.height
+        if (w < 4 || h < 4) return
+
+        val pixels = IntArray(w * h)
+        bmp.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        val lums = IntArray(w * h)
+        for (i in pixels.indices) {
+            val c = pixels[i]
+            val r = (c shr 16) and 0xFF
+            val g = (c shr 8) and 0xFF
+            val b = c and 0xFF
+            lums[i] = (r * 77 + g * 150 + b * 29) shr 8
+        }
+
+        val tile = 32
+        val gw = ((w + tile - 1) / tile).coerceAtLeast(1)
+        val gh = ((h + tile - 1) / tile).coerceAtLeast(1)
+        var grid = IntArray(gw * gh)
+
+        for (gy in 0 until gh) {
+            val yStart = gy * tile
+            val yEnd = min(h - 1, yStart + tile - 1)
+            for (gx in 0 until gw) {
+                val xStart = gx * tile
+                val xEnd = min(w - 1, xStart + tile - 1)
+                var maxPair = 64
+                var y = yStart
+                while (y < yEnd) {
+                    val row0 = y * w
+                    val row1 = (y + 1) * w
+                    var x = xStart
+                    while (x < xEnd) {
+                        val avg2x2 = (lums[row0 + x] + lums[row0 + x + 1] +
+                            lums[row1 + x] + lums[row1 + x + 1]) shr 2
+                        if (avg2x2 > maxPair) maxPair = avg2x2
+                        x += 2
+                    }
+                    y += 2
+                }
+                grid[gy * gw + gx] = maxPair
+            }
+        }
+
+        // Širimo vrednost svetlog papira u eventualne potpuno tamne blokove (npr. zaglavlje)
+        repeat(2) {
+            val next = grid.copyOf()
+            for (gy in 0 until gh) {
+                for (gx in 0 until gw) {
+                    val v = grid[gy * gw + gx]
+                    if (v >= 115) continue
+                    var best = v
+                    for (dy in -1..1) {
+                        val ny = gy + dy
+                        if (ny !in 0 until gh) continue
+                        for (dx in -1..1) {
+                            val nx = gx + dx
+                            if (nx !in 0 until gw) continue
+                            val nv = grid[ny * gw + nx]
+                            if (nv > best) best = nv
+                        }
+                    }
+                    next[gy * gw + gx] = best
+                }
+            }
+            grid = next
+        }
+
+        // Blago zaglađivanje mreže pozadine (3x3 prosek) radi izbegavanja skokova između blokova
+        val smoothed = IntArray(gw * gh)
+        for (gy in 0 until gh) {
+            for (gx in 0 until gw) {
+                var sum = 0
+                var count = 0
+                for (dy in -1..1) {
+                    val ny = gy + dy
+                    if (ny !in 0 until gh) continue
+                    for (dx in -1..1) {
+                        val nx = gx + dx
+                        if (nx !in 0 until gw) continue
+                        sum += grid[ny * gw + nx]
+                        count++
+                    }
+                }
+                smoothed[gy * gw + gx] = (sum / count).coerceAtLeast(80)
+            }
+        }
+
+        for (y in 0 until h) {
+            val fy = (y.toFloat() + 0.5f) / tile - 0.5f
+            val gy0 = floor(fy).toInt().coerceIn(0, gh - 1)
+            val gy1 = (gy0 + 1).coerceAtMost(gh - 1)
+            val ty = (fy - gy0).coerceIn(0f, 1f)
+            val rowOffset = y * w
+            val gRow0 = gy0 * gw
+            val gRow1 = gy1 * gw
+
+            for (x in 0 until w) {
+                val fx = (x.toFloat() + 0.5f) / tile - 0.5f
+                val gx0 = floor(fx).toInt().coerceIn(0, gw - 1)
+                val gx1 = (gx0 + 1).coerceAtMost(gw - 1)
+                val tx = (fx - gx0).coerceIn(0f, 1f)
+
+                val c00 = smoothed[gRow0 + gx0]
+                val c10 = smoothed[gRow0 + gx1]
+                val c01 = smoothed[gRow1 + gx0]
+                val c11 = smoothed[gRow1 + gx1]
+                val top = c00 + (c10 - c00) * tx
+                val bot = c01 + (c11 - c01) * tx
+                val paperBg = (top + (bot - top) * ty).roundToInt().coerceAtLeast(80)
+                val norm = ((lums[rowOffset + x] * 255) / paperBg).coerceIn(0, 255)
+
+                // Na čistim digitalnim slikama (paperBg >= 238) čuvamo pune anti-alias polu-tonove;
+                // na fotografijama papira i kamerama (paperBg < 238) istežemo kontrast u odnosu na
+                // stvarnu svetlinu papira (bez uticaja tamnih okvira tabela).
+                val outGray = if (paperBg >= 238) {
+                    norm
+                } else {
+                    when {
+                        norm >= 227 -> 255
+                        norm <= 115 -> 0
+                        else -> ((norm - 115) * 255) / (227 - 115)
+                    }
+                }
+                pixels[rowOffset + x] = (0xFF shl 24) or (outGray shl 16) or (outGray shl 8) or outGray
+            }
+        }
+
+        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+    }
+
+    /**
      * Izvršava lokalni ćirilični OCR pomoću Tesseract 4 LSTM modela (`srp.traineddata`)
      * i vraća pun tekst zajedno sa segmentima linija i njihovim koordinatama (`left`, `top`, `right`, `bottom`)
      * iz hOCR izlaza radi geometrijske rekonstrukcije kolona i redova tabele.
      */
-    private fun recognizeTextWithTesseract(filePath: String): Map<String, Any>? {
+    private fun recognizeTextWithTesseract(filePath: String, mode: Int = 0): Map<String, Any>? {
         synchronized(tesseractLock) {
             val dataParent = ensureTessDataReady() ?: return null
-            val bitmap = decodeUprightBitmap(filePath) ?: return null
+            val decoded = decodeUprightBitmap(filePath, mode) ?: return null
+            val bitmap = decoded.bitmap
+            val coordScale = decoded.coordScale
             val tess = TessBaseAPI()
             try {
                 val initialized = tess.init(
@@ -248,7 +408,16 @@ class MainActivity : FlutterActivity() {
                 if (!initialized) {
                     return null
                 }
-                tess.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
+                tess.pageSegMode = if (mode == 1) {
+                    TessBaseAPI.PageSegMode.PSM_SPARSE_TEXT
+                } else {
+                    TessBaseAPI.PageSegMode.PSM_AUTO
+                }
+                // Parametri za fotografije sa prave kamere:
+                // - user_defined_dpi=300: sprečava pogrešnu procenu veličine fonta (default je 70 dpi)
+                // - tessedit_do_invert=0: računi su taman tekst na svetloj podlozi (sprečava inverziju osenčenih boksova)
+                tess.setVariable("user_defined_dpi", "300")
+                tess.setVariable("tessedit_do_invert", "0")
                 tess.setImage(bitmap)
 
                 val fullText = tess.utF8Text ?: ""
@@ -300,6 +469,7 @@ class MainActivity : FlutterActivity() {
                         var segTop = 0.0
                         var segRight = 0.0
                         var segBottom = 0.0
+                        var wordHeightSum = 0.0
 
                         fun flushSegment() {
                             val text = segWords.joinToString(" ").trim()
@@ -307,14 +477,15 @@ class MainActivity : FlutterActivity() {
                                 lines.add(
                                     mapOf(
                                         "text" to text,
-                                        "left" to segLeft,
-                                        "top" to segTop,
-                                        "right" to segRight,
-                                        "bottom" to segBottom
+                                        "left" to segLeft * coordScale,
+                                        "top" to segTop * coordScale,
+                                        "right" to segRight * coordScale,
+                                        "bottom" to segBottom * coordScale
                                     )
                                 )
                             }
                             segWords = mutableListOf()
+                            wordHeightSum = 0.0
                         }
 
                         for (wm in wordMatches) {
@@ -325,27 +496,41 @@ class MainActivity : FlutterActivity() {
                             val wText = decodeHtmlText(wm.groupValues[5])
                             if (wText.isEmpty()) continue
 
+                            val wWidth = max(1.0, wRight - wLeft)
+                            val wHeight = max(1.0, wBottom - wTop)
+                            // Ignoriši artefakte vertikalnih/horizontalnih linija tabele i okvira uplatnice
+                            // kako ne bi premostili prazninu između leve i desne kolone.
+                            val isBorderArtifact = wText.all { it in "|¦[]_—~\\/" } ||
+                                ((wText == "I" || wText == "l" || wText == "1" || wText == "!") &&
+                                    wHeight > wWidth * 5.0)
+                            if (isBorderArtifact) continue
+
                             if (segWords.isEmpty()) {
                                 segWords.add(wText)
                                 segLeft = wLeft
                                 segTop = wTop
                                 segRight = wRight
                                 segBottom = wBottom
+                                wordHeightSum = wHeight
                             } else {
-                                val segHeight = max(1.0, segBottom - segTop)
+                                // Koristimo prosečnu visinu reči umesto (segBottom - segTop) jer blagi
+                                // nagib kamere (2-4°) povećava ukupni vertikalni raspon celog segmenta.
+                                val avgWordHeight = max(1.0, wordHeightSum / segWords.size)
                                 val gap = wLeft - segRight
-                                if (gap > max(segHeight * 2.2, 45.0)) {
+                                if (gap > max(avgWordHeight * 1.65, 18.0)) {
                                     flushSegment()
                                     segWords.add(wText)
                                     segLeft = wLeft
                                     segTop = wTop
                                     segRight = wRight
                                     segBottom = wBottom
+                                    wordHeightSum = wHeight
                                 } else {
                                     segWords.add(wText)
                                     segTop = min(segTop, wTop)
                                     segRight = max(segRight, wRight)
                                     segBottom = max(segBottom, wBottom)
+                                    wordHeightSum += wHeight
                                 }
                             }
                         }
@@ -356,10 +541,10 @@ class MainActivity : FlutterActivity() {
                             lines.add(
                                 mapOf(
                                     "text" to cleanLine,
-                                    "left" to lineLeft,
-                                    "top" to lineTop,
-                                    "right" to lineRight,
-                                    "bottom" to lineBottom
+                                    "left" to lineLeft * coordScale,
+                                    "top" to lineTop * coordScale,
+                                    "right" to lineRight * coordScale,
+                                    "bottom" to lineBottom * coordScale
                                 )
                             )
                         }

@@ -70,8 +70,18 @@ def main():
         edit_id = edits.insert(packageName=package, body={}).execute()["id"]
 
         print(f"==> uploading {args.aab} ({os.path.getsize(args.aab) / 1e6:.1f} MB)")
-        media = MediaFileUpload(args.aab, mimetype="application/octet-stream", resumable=True)
-        bundle = edits.bundles().upload(packageName=package, editId=edit_id, media_body=media).execute()
+        media = MediaFileUpload(
+            args.aab,
+            mimetype="application/octet-stream",
+            chunksize=8 * 1024 * 1024,
+            resumable=True,
+        )
+        req = edits.bundles().upload(packageName=package, editId=edit_id, media_body=media)
+        bundle = None
+        while bundle is None:
+            status, bundle = req.next_chunk(num_retries=5)
+            if status:
+                print(f"    upload progress: {int(status.progress() * 100)}%")
         version_code = bundle["versionCode"]
 
         edits.tracks().update(

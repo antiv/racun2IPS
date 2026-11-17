@@ -192,26 +192,102 @@ import Vision
       }
       for obs in observations {
         guard let topCandidate = obs.topCandidates(1).first else { continue }
-        let text = topCandidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty { continue }
-        fullLines.append(text)
-        let box = obs.boundingBox
-        let left = Double(box.minX) * width
-        let right = Double(box.maxX) * width
-        let top = Double(1.0 - box.maxY) * height
-        let bottom = Double(1.0 - box.minY) * height
-        lines.append([
-          "text": text,
-          "left": left,
-          "top": top,
-          "right": right,
-          "bottom": bottom,
-        ])
+        let rawString = topCandidate.string
+        let trimmed = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { continue }
+
+        var tokenRanges: [Range<String.Index>] = []
+        var tokenStart: String.Index? = nil
+        for idx in rawString.indices {
+          if rawString[idx].isWhitespace {
+            if let start = tokenStart {
+              tokenRanges.append(start..<idx)
+              tokenStart = nil
+            }
+          } else if tokenStart == nil {
+            tokenStart = idx
+          }
+        }
+        if let start = tokenStart {
+          tokenRanges.append(start..<rawString.endIndex)
+        }
+
+        var segWords: [String] = []
+        var segLeft = 0.0
+        var segTop = 0.0
+        var segRight = 0.0
+        var segBottom = 0.0
+        var wordHeightSum = 0.0
+
+        func flushSegment() {
+          let segText = segWords.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+          if !segText.isEmpty {
+            fullLines.append(segText)
+            lines.append([
+              "text": segText,
+              "left": segLeft,
+              "top": segTop,
+              "right": segRight,
+              "bottom": segBottom,
+            ])
+          }
+          segWords.removeAll()
+          wordHeightSum = 0.0
+        }
+
+        for range in tokenRanges {
+          let wText = String(rawString[range])
+          if wText.isEmpty || wText.allSatisfy({ "|¦[]_—~\\/".contains($0) }) {
+            continue
+          }
+          let box = (try? topCandidate.boundingBox(for: range))?.boundingBox ?? obs.boundingBox
+          let wLeft = Double(box.minX) * width
+          let wRight = Double(box.maxX) * width
+          let wTop = Double(1.0 - box.maxY) * height
+          let wBottom = Double(1.0 - box.minY) * height
+          let wWidth = max(1.0, wRight - wLeft)
+          let wHeight = max(1.0, wBottom - wTop)
+
+          if (wText == "I" || wText == "l" || wText == "1" || wText == "!") && wHeight > wWidth * 5.0 {
+            continue
+          }
+
+          if segWords.isEmpty {
+            segWords.append(wText)
+            segLeft = wLeft
+            segTop = wTop
+            segRight = wRight
+            segBottom = wBottom
+            wordHeightSum = wHeight
+          } else {
+            let avgWordHeight = max(1.0, wordHeightSum / Double(segWords.count))
+            let gap = wLeft - segRight
+            if gap > max(avgWordHeight * 1.65, 18.0) {
+              flushSegment()
+              segWords.append(wText)
+              segLeft = wLeft
+              segTop = wTop
+              segRight = wRight
+              segBottom = wBottom
+              wordHeightSum = wHeight
+            } else {
+              segWords.append(wText)
+              segLeft = min(segLeft, wLeft)
+              segTop = min(segTop, wTop)
+              segRight = max(segRight, wRight)
+              segBottom = max(segBottom, wBottom)
+              wordHeightSum += wHeight
+            }
+          }
+        }
+        flushSegment()
       }
     }
 
     request.recognitionLevel = .accurate
-    request.usesLanguageCorrection = true
+    // Isključujemo rusku/ukrajinsku rečničku autokorekciju kako Apple Vision ne bi
+    // menjao srpske nazive primalaca, gradova i svrhe uplate u ruske reči.
+    request.usesLanguageCorrection = false
     if #available(iOS 16.0, *) {
       request.automaticallyDetectsLanguage = true
     }

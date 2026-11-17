@@ -48,11 +48,19 @@ class LocalOcrService {
   Future<InvoiceData?> tryExtractFromFile(String filePath) async {
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
-      final result = await _recognizeAndParse(recognizer, filePath);
-      if (result != null) return result;
+      final attempt = await _recognizeAndParse(
+        recognizer,
+        filePath,
+        allowAltMode: true,
+      );
+      if (attempt.data != null) return attempt.data;
       // Ako u normalnoj orijentaciji podaci nisu izvučeni (npr. uplatnica slikana
-      // poprečno/bočno kamerom), probaj sliku okrenutu za 90° i 270°.
-      return await _recognizeRotated(recognizer, filePath);
+      // poprečno/bočno kamerom), probaj sliku okrenutu za 270° i 90°.
+      return await _recognizeRotated(
+        recognizer,
+        filePath,
+        allowAltMode: attempt.abortedForRotation,
+      );
     } finally {
       await recognizer.close();
     }
@@ -60,8 +68,9 @@ class LocalOcrService {
 
   Future<InvoiceData?> _recognizeRotated(
     TextRecognizer recognizer,
-    String filePath,
-  ) async {
+    String filePath, {
+    required bool allowAltMode,
+  }) async {
     final rotatedFiles = <File>[];
     try {
       final bytes = await File(filePath).readAsBytes();
@@ -72,10 +81,14 @@ class LocalOcrService {
         final file = File('${dir.path}/ips_ocr_rotated_${stamp}_$i.jpg');
         await file.writeAsBytes(variants[i], flush: true);
         rotatedFiles.add(file);
-        final result = await _recognizeAndParse(recognizer, file.path);
-        if (result != null) {
+        final attempt = await _recognizeAndParse(
+          recognizer,
+          file.path,
+          allowAltMode: allowAltMode,
+        );
+        if (attempt.data != null) {
           debugPrint('LocalOcrService: uspešno parsirano iz okrenute slike');
-          return result;
+          return attempt.data;
         }
       }
       return null;
@@ -108,15 +121,16 @@ class LocalOcrService {
       );
     }
     return [
-      for (final angle in const [90, 270])
+      for (final angle in const [270, 90])
         img.encodeJpg(img.copyRotate(upright, angle: angle), quality: 92),
     ];
   }
 
-  Future<InvoiceData?> _recognizeAndParse(
+  Future<({InvoiceData? data, bool abortedForRotation})> _recognizeAndParse(
     TextRecognizer recognizer,
-    String filePath,
-  ) async {
+    String filePath, {
+    required bool allowAltMode,
+  }) async {
     try {
       // 1. Pokrećemo nativni OCR koji na sistemu ima model za ćirilicu:
       //    - Na Androidu: Tesseract 4 LSTM sa srpskim ćiriličnim modelom (`srp.traineddata`)
@@ -131,35 +145,53 @@ class LocalOcrService {
       final isCyrillic = cyrillicCount >= 8;
 
       if (isCyrillic && nativeOcr != null) {
+        // Ako su višeslovni segmenti izrazito vertikalni (npr. 79 vert vs 0 horiz),
+        // slika je okrenuta bočno (90°/270°), pa odmah prelazimo na _recognizeRotated
+        // kako se vertikalne kolone ne bi pogrešno spajale po Y-osi.
+        if (_isSidewaysText(nativeOcr.lines)) {
+          return (data: null, abortedForRotation: true);
+        }
+
         debugPrint(
           'LocalOcrService: Prepoznata ćirilica ($cyrillicCount slova) — koristim ćirilični OCR za CELU sliku (${nativeOcr.text.length} karaktera, ${nativeOcr.lines.length} segmenata)',
         );
-        // ĆIRILIČNI OCR ZA CELU SLIKU:
-        // Sva polja (primalac, svrha, račun, poziv na broj, iznos) se parsiraju
-        // isključivo iz ćiriličnog OCR modela. Nema mešanja sa ML Kit-om.
-        final cyrillicData = _parseFromOcrOutput(nativeOcr.text, nativeOcr.lines);
+        final mlData = Platform.isAndroid
+            ? await _readMlNumericData(recognizer, filePath)
+            : null;
+
+        var cyrillicData = _parseCyrillicWithMl(nativeOcr, mlData);
+        // Ako primarna čista slika nije izvukla sve obavezne podatke (npr. jaka senka
+        // ruke/telefona na papiru), probaj morfološku normalizaciju pozadine (mode: 1).
+        if (cyrillicData == null && Platform.isAndroid && allowAltMode) {
+          final shadowOcr = await recognizeTextNative(filePath, mode: 1);
+          if (shadowOcr != null && !_isSidewaysText(shadowOcr.lines)) {
+            cyrillicData = _parseCyrillicWithMl(shadowOcr, mlData);
+          }
+        }
         if (cyrillicData != null) {
           debugPrint(
-            'LocalOcrService (Ćirilica): Uspešno prepoznat primalac "${cyrillicData.recipientName}", račun: ${cyrillicData.accountNumber}, iznos: ${cyrillicData.amount}, poziv: ${cyrillicData.referenceNumber}',
+            'LocalOcrService (Ćirilica): Uspešno prepoznat primalac "${cyrillicData.recipientName}", svrha: "${cyrillicData.purpose}", račun: ${cyrillicData.accountNumber}, iznos: ${cyrillicData.amount}, poziv: ${cyrillicData.referenceNumber}',
           );
-          return cyrillicData;
+          return (data: cyrillicData, abortedForRotation: false);
         }
 
-        // Ako ćirilični model nije uspeo da izvuče validne podatke (npr. mutna slika,
-        // nečitak račun), NIKADA ne podmećemo ML Kit latinične greške,
-        // već vraćamo null kako bi se aktivirao MATE AI fallback.
         debugPrint(
-          'LocalOcrService: Ćirilični račun nije prošao lokalnu validaciju -> AI fallback',
+          'LocalOcrService: Ćirilični račun nije prošao lokalnu validaciju -> sledeći korak / AI fallback',
         );
-        return null;
+        return (data: null, abortedForRotation: false);
       }
 
       // 2. Dokument je na latinici (npr. račun SBB, Yettel, A1, Infostan na latinici):
       // Na iOS-u Apple Vision čita i latinicu, pa ga prvo proveravamo.
+      InvoiceData? visionLatinFallback;
       if (Platform.isIOS && nativeOcr != null) {
-        final visionLatinData = _parseFromOcrOutput(nativeOcr.text, nativeOcr.lines);
-        if (visionLatinData != null && visionLatinData.referenceNumber.isNotEmpty) {
-          return visionLatinData;
+        visionLatinFallback = _parseFromOcrOutput(
+          nativeOcr.text,
+          nativeOcr.lines,
+        );
+        if (visionLatinFallback != null &&
+            visionLatinFallback.referenceNumber.isNotEmpty) {
+          return (data: visionLatinFallback, abortedForRotation: false);
         }
       }
 
@@ -171,11 +203,109 @@ class LocalOcrService {
         'LocalOcrService (ML Kit - latinica): prepoznato ${recognized.text.length} karaktera teksta',
       );
 
-      return _parseFromOcrOutput(recognized.text, mlLines);
+      final latinResult =
+          _parseFromOcrOutput(recognized.text, mlLines) ?? visionLatinFallback;
+      if (latinResult != null) {
+        return (data: latinResult, abortedForRotation: false);
+      }
+
+      // Ako je na Androidu u mode=0 viđeno malo ćirilice (< 8 slova, npr. zbog
+      // tamne senke), a ni ML Kit latinica nije prošla, probaj mode=1 pre AI/rotacije.
+      if (Platform.isAndroid && allowAltMode) {
+        final shadowOcr = await recognizeTextNative(filePath, mode: 1);
+        final shadowCyrCount = shadowOcr != null
+            ? cyrillicRegex.allMatches(shadowOcr.text).length
+            : 0;
+        if (shadowOcr != null && shadowCyrCount >= 8) {
+          if (_isSidewaysText(shadowOcr.lines)) {
+            return (data: null, abortedForRotation: true);
+          }
+          final mlRowText = _buildHorizontalRowText(mlLines);
+          final parts = <String>[
+            if (recognized.text.trim().isNotEmpty) recognized.text.trim(),
+            if (mlRowText.trim().isNotEmpty) mlRowText.trim(),
+          ];
+          final mlData = (
+            rawText: parts.join('\n'),
+            mlLines: mlLines,
+          );
+          final shadowData = _parseCyrillicWithMl(shadowOcr, mlData);
+          if (shadowData != null) {
+            debugPrint(
+              'LocalOcrService (Ćirilica - senka): Uspešno prepoznat primalac "${shadowData.recipientName}", svrha: "${shadowData.purpose}", račun: ${shadowData.accountNumber}, iznos: ${shadowData.amount}, poziv: ${shadowData.referenceNumber}',
+            );
+            return (data: shadowData, abortedForRotation: false);
+          }
+        }
+      }
+
+      return (data: null, abortedForRotation: false);
     } catch (e) {
       debugPrint('LocalOcrService processImage error: $e');
-      return null;
+      return (data: null, abortedForRotation: false);
     }
+  }
+
+  bool _isSidewaysText(List<NativeOcrLine> lines) {
+    var horizCount = 0;
+    var vertCount = 0;
+    for (final l in lines) {
+      if (l.text.length < 6) continue;
+      final w = l.right - l.left;
+      final h = l.bottom - l.top;
+      if (h > w * 2.0) {
+        vertCount++;
+      } else if (w >= h * 1.2) {
+        horizCount++;
+      }
+    }
+    if (vertCount >= 10 && vertCount > horizCount * 2) {
+      debugPrint(
+        'LocalOcrService: Detektovan bočno rotiran tekst ($vertCount vert vs $horizCount horiz) -> prelazim na rotirane varijante',
+      );
+      return true;
+    }
+    return false;
+  }
+
+  Future<({String rawText, List<NativeOcrLine> mlLines})> _readMlNumericData(
+    TextRecognizer recognizer,
+    String filePath,
+  ) async {
+    final inputImage = InputImage.fromFilePath(filePath);
+    final mlRecognized = await recognizer.processImage(inputImage);
+    final mlLines = _linesFromMlKit(mlRecognized);
+    final mlRowText = _buildHorizontalRowText(mlLines);
+    final parts = <String>[
+      if (mlRecognized.text.trim().isNotEmpty) mlRecognized.text.trim(),
+      if (mlRowText.trim().isNotEmpty) mlRowText.trim(),
+    ];
+    return (rawText: parts.join('\n'), mlLines: mlLines);
+  }
+
+  InvoiceData? _parseCyrillicWithMl(
+    NativeOcrResult ocr,
+    ({String rawText, List<NativeOcrLine> mlLines})? mlData,
+  ) {
+    String? numericFallback;
+    if (mlData != null) {
+      final hybridAmountText = _buildHybridAmountRowText(
+        ocr.lines,
+        mlData.mlLines,
+      );
+      final parts = <String>[
+        if (mlData.rawText.isNotEmpty) mlData.rawText,
+        if (hybridAmountText.trim().isNotEmpty) hybridAmountText.trim(),
+      ];
+      if (parts.isNotEmpty) {
+        numericFallback = parts.join('\n');
+      }
+    }
+    return _parseFromOcrOutput(
+      ocr.text,
+      ocr.lines,
+      numericFallbackText: numericFallback,
+    );
   }
 
   List<NativeOcrLine> _linesFromMlKit(RecognizedText recognized) {
@@ -206,8 +336,9 @@ class LocalOcrService {
   ///    sa desnim iznosom na istoj Y visini i boks modela `97` sa pozivom na broj.
   InvoiceData? _parseFromOcrOutput(
     String fullText,
-    List<NativeOcrLine> lines,
-  ) {
+    List<NativeOcrLine> lines, {
+    String? numericFallbackText,
+  }) {
     if (fullText.trim().isEmpty && lines.isEmpty) return null;
 
     final columnText = _buildColumnTrackText(lines);
@@ -218,44 +349,61 @@ class LocalOcrService {
       colResult = tryParseInvoiceText(
         columnText,
         horizontalRowsText: rowText.isNotEmpty ? rowText : null,
+        numericFallbackText: numericFallbackText,
       );
     }
 
     final direct = tryParseInvoiceText(
       fullText,
       horizontalRowsText: rowText.isNotEmpty ? rowText : null,
+      numericFallbackText: numericFallbackText,
     );
 
     InvoiceData? rowResult;
     if (rowText.isNotEmpty) {
-      rowResult = tryParseInvoiceText(rowText);
+      rowResult = tryParseInvoiceText(
+        rowText,
+        numericFallbackText: numericFallbackText,
+      );
     }
 
     final base = colResult ?? direct ?? rowResult;
     if (base == null) return null;
 
-    // Dopuni iznos ili poziv na broj iz alternativnih rasporeda ako je potrebno.
-    final extras = [rowResult, direct, colResult].whereType<InvoiceData>();
+    // Dopuni iznos, poziv na broj, naziv primaoca ili svrhu uplate iz
+    // alternativnih rasporeda ako je u primarnom rasporedu došlo do cepanja kolone.
+    final extras = [direct, rowResult, colResult].whereType<InvoiceData>();
     for (final alt in extras) {
       if (alt.accountNumber != base.accountNumber) continue;
       if (base.amount <= 0 && alt.amount > 0) {
         base.amount = alt.amount;
       }
-      if (base.referenceNumber.isEmpty && alt.referenceNumber.isNotEmpty) {
+      if ((base.referenceNumber.isEmpty ||
+              (!base.referenceNumber.startsWith('97') &&
+                  alt.referenceNumber.startsWith('97'))) &&
+          alt.referenceNumber.isNotEmpty) {
         base.referenceNumber = alt.referenceNumber;
+      }
+      if (isBetterPurpose(alt.purpose, current: base.purpose)) {
+        base.purpose = alt.purpose;
+      }
+      if (isBetterRecipientName(
+        alt.recipientName,
+        current: base.recipientName,
+      )) {
+        base.recipientName = alt.recipientName;
       }
     }
 
     return base;
   }
 
-
-
   /// Geometrijski grupiše linije u vertikalne kolone (stupce) na osnovu
   /// horizontalnog preklapanja X-opsega, bez ikakvih fiksnih konstanti podele ekrana.
   /// Time svaka kolona uplatnice (leva kolona sa Platilac/Svrha/Primalac, srednja
   /// kolona sa Šifra/Iznos/Račun/Model/Poziv i desni talon) ostaje u sopstvenom
-  /// vertikalnom toku od vrha ka dnu.
+  /// vertikalnom toku od vrha ka dnu, čak i kada je slika sa kamere blago nagnuta
+  /// ili je tekst unutar okvira uplatnice uvučen u odnosu na labelu.
   String _buildColumnTrackText(List<NativeOcrLine> allLines) {
     if (allLines.length < 3) return '';
 
@@ -282,28 +430,47 @@ class LocalOcrService {
 
       for (final track in tracks) {
         final vGap = line.top - track.bottom;
-        if (vGap < -lineH * 0.8 || vGap > lineH * 8.5) continue;
+        if (vGap < -lineH * 0.85 || vGap > lineH * 9.5) continue;
 
-        final trackW = math.max(1.0, track.colRight - track.left);
+        // Efektivna desna ivica kolone uzima u obzir da prva linija u koloni
+        // može biti kratka labela (npr. "Платилац:" ili "Прималац:"), ali ne
+        // sme prelaziti u susednu kolonu uplatnice.
+        final effectiveColRight = math.max(
+          track.colRight,
+          track.recentLeft + lineH * 5.0,
+        );
+        final trackW = math.max(1.0, effectiveColRight - track.left);
         final overlap =
-            math.min(track.colRight, line.right) -
+            math.min(effectiveColRight, line.right) -
             math.max(track.left, line.left);
         final minW = math.min(trackW, lineW);
-        final leftDiff = (line.left - track.left).abs();
 
-        if (leftDiff > math.max(lineH * 4.5, pageW * 0.14)) continue;
+        // Poredi X poziciju sa poslednjom linijom u tragu (otporno na nagib kamere 2-5°)
+        // kao i sa početnom marginom traga.
+        final leftDiffRecent = (line.left - track.recentLeft).abs();
+        final leftDiffAnchor = (line.left - track.left).abs();
+        final leftDiff = math.min(leftDiffRecent, leftDiffAnchor);
 
-        final hasOverlap = overlap > minW * 0.22;
+        if (line.left > effectiveColRight + lineH * 1.0) continue;
+        if (leftDiff > math.max(lineH * 3.5, pageW * 0.06)) continue;
+
+        final hasOverlap = overlap > minW * 0.25;
         final sharesLeftMargin =
-            leftDiff <= lineH * 1.8 &&
-            line.left <= track.colRight + lineH * 1.5;
+            leftDiff <= math.max(lineH * 2.0, pageW * 0.04) &&
+            line.left <= effectiveColRight + lineH * 0.8;
+        // Tekst uvučen udesno unutar istog boksa uplatnice (npr. centriran naziv
+        // primaoca ili svrha uplate ispod kratke labele "Прималац:"):
+        final isIndentedInBox =
+            !isSpanning &&
+            line.left >= track.recentLeft - lineH * 1.0 &&
+            line.left <= track.recentLeft + lineH * 3.5 &&
+            line.right <= effectiveColRight + lineH * 3.0;
 
-        if (!hasOverlap && !sharesLeftMargin) continue;
+        if (!hasOverlap && !sharesLeftMargin && !isIndentedInBox) continue;
 
+        final overlapRatio = math.max(0.0, overlap) / minW;
         final score =
-            (overlap / minW) * 100.0 -
-            leftDiff * 0.5 -
-            math.max(0.0, vGap) * 0.15;
+            overlapRatio * 100.0 - leftDiff * 0.4 - math.max(0.0, vGap) * 0.15;
         if (score > bestScore) {
           bestScore = score;
           bestTrack = track;
@@ -315,6 +482,56 @@ class LocalOcrService {
       } else {
         tracks.add(_VerticalTrack(line, isSpanning: isSpanning, pageW: pageW));
       }
+    }
+
+    // Ako je uvučeni pod-blok unutar iste kolone ipak napravio manji zaseban trag
+    // čiji X-opseg leži unutar glavnog traga te kolone, pripoji ga glavnom tragu
+    // kako bi linije ostale u tačnom vertikalnom redosledu od vrha ka dnu.
+    if (tracks.length > 1) {
+      final merged = <_VerticalTrack>[];
+      tracks.sort((a, b) => b.lines.length.compareTo(a.lines.length));
+      for (final t in tracks) {
+        _VerticalTrack? host;
+        for (final m in merged) {
+          final avgH = m.lines.isEmpty
+              ? 20.0
+              : math.max(1.0, m.lines.first.bottom - m.lines.first.top);
+          final xContained =
+              t.left >= m.left - avgH * 1.5 &&
+              t.colRight <= m.colRight + avgH * 2.0;
+          if (!xContained) continue;
+          // Ne spajaj ako imaju linije koje se horizontalno sudaraju na istoj Y visini.
+          final hasYCollision = t.lines.any(
+            (tl) => m.lines.any((ml) {
+              final h = math.max(
+                1.0,
+                math.min(tl.bottom - tl.top, ml.bottom - ml.top),
+              );
+              final sameY =
+                  ((tl.top + tl.bottom) - (ml.top + ml.bottom)).abs() * 0.5 <
+                  h * 0.55;
+              final xGap =
+                  math.max(tl.left, ml.left) - math.min(tl.right, ml.right);
+              return sameY && xGap > h * 1.2;
+            }),
+          );
+          if (!hasYCollision) {
+            host = m;
+            break;
+          }
+        }
+        if (host != null) {
+          for (final l in t.lines) {
+            final lw = math.max(1.0, l.right - l.left);
+            host.add(l, isSpanning: lw > pageW * 0.48);
+          }
+        } else {
+          merged.add(t);
+        }
+      }
+      tracks
+        ..clear()
+        ..addAll(merged);
     }
 
     tracks.sort((a, b) {
@@ -376,9 +593,7 @@ class LocalOcrService {
       }
     }
 
-    final hasLettersRegex = RegExp(
-      r'[A-Za-zČĆŽŠĐčćžšđА-Яа-яЂђЈјЉљЊњЋћЏџ]{2,}',
-    );
+    final hasLettersRegex = RegExp(r'[A-Za-zČĆŽŠĐčćžšđА-Яа-яЂђЈјЉљЊњЋћЏџ]{2,}');
     final endsWithAmountRegex = RegExp(r'\d+[.,]\d{2}\s*$');
 
     final buffer = StringBuffer();
@@ -409,6 +624,53 @@ class LocalOcrService {
     }
     return buffer.toString();
   }
+
+  /// Gradi pomoćni tekst horizontalnih redova za numerički fallback spajajući
+  /// ćirilične labele iz Tesseract-a (poput "В ЗА УПЛАТУ..." na levoj strani
+  /// tabele) sa numeričkim iznosima iz ML Kit-a na istoj Y visini.
+  String _buildHybridAmountRowText(
+    List<NativeOcrLine> cyrLines,
+    List<NativeOcrLine> mlLines,
+  ) {
+    if (cyrLines.isEmpty || mlLines.isEmpty) return '';
+
+    final hasCyrillicWords = RegExp(r'[А-Яа-яЂђЈјЉљЊњЋћЏџ]{2,}');
+    final pureNumericOrAmount = RegExp(r'^[=\s]*\d[\d\s.,\-]{1,24}$');
+    final amountTokenRegex = RegExp(
+      r'(?:=\s*)?(?<![\d.,\-])(\d{1,3}(?:[.\s]\d{3})+\s*[.,]\s*\d{2}|\d+\s*[.,]\s*\d{2})(?![.,]?\d|\s*%)',
+    );
+
+    final numericMl = <NativeOcrLine>[];
+    for (final ml in mlLines) {
+      final t = ml.text.trim();
+      if (pureNumericOrAmount.hasMatch(t)) {
+        numericMl.add(ml);
+      } else {
+        final matches = amountTokenRegex.allMatches(t).toList();
+        if (matches.isNotEmpty) {
+          final m = matches.last;
+          numericMl.add(
+            NativeOcrLine(
+              text: m.group(0)!.trim(),
+              left: ml.right - math.min(80.0, (ml.right - ml.left) * 0.35),
+              top: ml.top,
+              right: ml.right,
+              bottom: ml.bottom,
+            ),
+          );
+        }
+      }
+    }
+    if (numericMl.isEmpty) return '';
+
+    final cyrLabelLines = cyrLines
+        .where((cl) => hasCyrillicWords.hasMatch(cl.text))
+        .toList();
+    return _buildHorizontalRowText(<NativeOcrLine>[
+      ...cyrLabelLines,
+      ...numericMl,
+    ]);
+  }
 }
 
 class _VerticalTrack {
@@ -418,6 +680,7 @@ class _VerticalTrack {
     required double pageW,
   }) : lines = [first],
        left = first.left,
+       recentLeft = first.left,
        top = first.top,
        right = first.right,
        colRight = isSpanning
@@ -427,6 +690,7 @@ class _VerticalTrack {
 
   final List<NativeOcrLine> lines;
   double left;
+  double recentLeft;
   double top;
   double right;
   double colRight;
@@ -435,6 +699,11 @@ class _VerticalTrack {
   void add(NativeOcrLine line, {required bool isSpanning}) {
     lines.add(line);
     left = math.min(left, line.left);
+    if (!isSpanning) {
+      // Blago prilagođavanje leve margine prati nagib kamere od vrha ka dnu,
+      // ali bez naglog skoka kada je pojedinačna linija uvučena udesno.
+      recentLeft = recentLeft * 0.65 + line.left * 0.35;
+    }
     top = math.min(top, line.top);
     right = math.max(right, line.right);
     if (!isSpanning) {

@@ -447,5 +447,164 @@ PRIMER ODRŽAVANJE DOO
       expect(data!.referenceNumber, '00089-024');
       expect(data.purpose, 'Uplata po računu broj 21850/26');
     });
+
+    test(
+      'kamera OCR (ćirilica): oštećene labele, spojene kolone i zaštita da svrha ne preuzme primaoca',
+      () {
+        const cameraCyrillic = '''
+l ПЛАТНЛАЦ: АНТОНИЈЕВИЋ ИВАН |
+ДР ИВАНА РИБАРА 88/24
+БЕОГРАД - НОВИ БЕОГРАД
+11073 БЕОГРАД
+Сврха уппате: Редовно одржаваье за 10/2026 Шиф. плаћ. 189 Валута РСД
+Прнмалац ЈКП ИНФОСТАН ТЕХНОЛОГИЈЕ Текући рачун примаоца 840-0000711171843-84
+Данијелова 33, 11000 Београд
+Број модела 97 Позив на број 78-123456789
+Укупно за уплату: 4.250,00 РСД
+''';
+        final data = tryParseInvoiceText(cameraCyrillic);
+        expect(data, isNotNull);
+        expect(data!.recipientName, 'JKP INFOSTAN TEHNOLOGIJE');
+        expect(data.purpose, 'Redovno održavanje za 10/2026');
+        expect(data.accountNumber, '840000071117184384');
+        expect(data.referenceNumber, '9778123456789');
+        expect(data.amount, closeTo(4250.0, 0.001));
+      },
+    );
+
+    test(
+      'kamera OCR: prazna svrha uplate ispod koje je odmah Primalac ne sme uzeti primaoca kao svrhu',
+      () {
+        const emptyPurposeSlip = '''
+Платилац:
+Петар Петровић
+Булевар ослобођеьа 12
+11000 Београд
+Сврха уплате:
+Прималац:
+СТАМБЕНА ЗАЈЕДНИЦА КРАЉА МИЛАНА 14
+11000 Београд
+Шифра плаћаьа: 189
+Износ: = 1.200,00
+Текући рачун примаоца: 160-0000000012345-95
+''';
+        final data = tryParseInvoiceText(emptyPurposeSlip);
+        expect(data, isNotNull);
+        expect(data!.recipientName, 'STAMBENA ZAJEDNICA KRALJA MILANA 14');
+        expect(data.purpose, 'Uplata po računu');
+        expect(data.amount, closeTo(1200.0, 0.001));
+      },
+    );
+
+    test(
+      'kamera OCR: dvoredni naziv primaoca (naziv + DOO u sledećem redu)',
+      () {
+        const twoLineRecipient = '''
+Платилац:
+Марко Марковић
+Сврха: Рачун за грејање
+Прималац:
+ТОПЛАНА ГРАДСКА
+ЈКП КРАГУЈЕВАЦ
+34000 Крагујевац
+Текући рачун примаоца: 840-0000711171843-84
+За уплату: 3.100,00 дин
+''';
+        final data = tryParseInvoiceText(twoLineRecipient);
+        expect(data, isNotNull);
+        expect(data!.recipientName, 'TOPLANA GRADSKA JKP KRAGUJEVAC');
+        expect(data.purpose, 'Račun za grejanje');
+      },
+    );
+
+    test(
+      'kamera OCR: oštećena poštanska linija platioca ("НЕ ОРАД ад 129") i umetnuta desna kolona između "ремала" i "ЕПС АД Београд"',
+      () {
+        const cameraInterleaved = '''
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+ДРУГЕ МОШТАНИЧКЕ БАТАЉОНЕ 12А
+НЕ ОРАД ад 129
+Сврха уплате:
+Уплата по рачуну
+ремала
+Текући рачун:
+200-0000000075409-96
+Број модела:
+Позив на број (одобрење):
+17-02004377503-2609
+МЕСТО И ДАТУМ ПРИЈЕМА
+ЕПС АД Београд
+11000 БЕОГРАД
+В ЗА УПЛАТУ У ТЕКУЋЕМ ПЕРИОДУ (А+Б)   у.522. 54
+''';
+        final data = tryParseInvoiceText(cameraInterleaved);
+        expect(data, isNotNull);
+        expect(data!.recipientName, 'EPS AD Beograd');
+        expect(data.purpose, 'Uplata po računu');
+        expect(data.accountNumber, '200000000007540996');
+        expect(data.referenceNumber, '9717020043775032609');
+        expect(data.amount, closeTo(3522.54, 0.001));
+      },
+    );
+
+    test(
+      'kamera OCR: izbrisane sitne labele uz ivicu okvira, mešani verzal "Ад" i poštanski broj primaoca',
+      () {
+        const damagedLabelsMixedAd = '''
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+ДР ИВАНА РИБАРА 88/24
+НЕ ОРАД ад 129
+.ска
+Уплата по рачуну
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+ЕПС Ад Београд
+11000 Београд
+Текући рачун примаоца: 200-75409-96
+Број модела: 97
+Позив на број: 14-02004377503-2610
+В ЗА УПЛАТУ (А+Б) 3.522,54
+''';
+        final data1 = tryParseInvoiceText(damagedLabelsMixedAd);
+        expect(data1, isNotNull);
+        expect(data1!.recipientName, 'EPS Ad Beograd');
+        expect(data1.accountNumber, '200000000007540996');
+        expect(data1.referenceNumber, '9714020043775032610');
+        expect(data1.amount, closeTo(3522.54, 0.001));
+
+        const damagedLabelsPostalAnchor = '''
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+ДР ИВАНА РИБАРА 88/24
+11073 БЕОГРАД 129
+.ска
+Уплата по рачуну
+ЕПС Београд
+11000 Београд
+Текући рачун примаоца: 200-75409-96
+Број модела: 97
+Позив на број: 14-02004377503-2610
+В ЗА УПЛАТУ (А+Б) 3.522,54
+''';
+        final data2 = tryParseInvoiceText(damagedLabelsPostalAnchor);
+        expect(data2, isNotNull);
+        expect(data2!.recipientName, 'EPS Beograd');
+
+        const missingFirstDashRef = '''
+Платилац:
+АНТОНИЈЕВИЋ ИВАН
+Прималац:
+ЕПС АД Београд
+Текући рачун примаоца: 200-75409-96
+Позив на broj: 1402004377503-2610
+В ЗА УПЛАТУ (А+Б) 3.522,54
+''';
+        final data3 = tryParseInvoiceText(missingFirstDashRef);
+        expect(data3, isNotNull);
+        expect(data3!.referenceNumber, '9714020043775032610');
+      },
+    );
   });
 }
