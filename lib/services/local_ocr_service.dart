@@ -225,10 +225,7 @@ class LocalOcrService {
             if (recognized.text.trim().isNotEmpty) recognized.text.trim(),
             if (mlRowText.trim().isNotEmpty) mlRowText.trim(),
           ];
-          final mlData = (
-            rawText: parts.join('\n'),
-            mlLines: mlLines,
-          );
+          final mlData = (rawText: parts.join('\n'), mlLines: mlLines);
           final shadowData = _parseCyrillicWithMl(shadowOcr, mlData);
           if (shadowData != null) {
             debugPrint(

@@ -754,7 +754,9 @@ _RefExtraction _extractReferenceNumber(
       for (final cell in line.split('   ')) {
         for (final m in dashedRefRegex.allMatches(cell)) {
           final token = m.group(1)!;
-          final compactLen = token.replaceAll(RegExp(r'[^0-9A-Z]', caseSensitive: false), '').length;
+          final compactLen = token
+              .replaceAll(RegExp(r'[^0-9A-Z]', caseSensitive: false), '')
+              .length;
           final hasMultipleDashes = '-'.allMatches(token).length >= 2;
           final isLongDashed = token.contains('-') && compactLen >= 9;
           if (mentionsModel97 ||
@@ -874,17 +876,13 @@ final _unambiguousEntityRegex = RegExp(
   caseSensitive: false,
 );
 
-final _upperShortEntityRegex = RegExp(
-  r'\b(?:AD|Ad|JP|Jp)\b(?!\s*\d)',
-);
+final _upperShortEntityRegex = RegExp(r'\b(?:AD|Ad|JP|Jp)\b(?!\s*\d)');
 
 final _postalCityRegex = RegExp(
   r'^\d{2,5}\s+[A-Za-zČĆŽŠĐčćžšđ]{2,}(?:\s+[A-Za-zČĆŽŠĐčćžšđ]{2,})?(?:\s+\d{1,3})?$',
 );
 
-final _fullSerbianPostalRegex = RegExp(
-  r'^[123]\d{4}\s+[A-Za-zČĆŽŠĐčćžšđ]{3,}',
-);
+final _fullSerbianPostalRegex = RegExp(r'^[123]\d{4}\s+[A-Za-zČĆŽŠĐčćžšđ]{3,}');
 
 final _brokenPostalTailRegex = RegExp(
   r'(?:^\d{2,5}\s+[A-Za-zČĆŽŠĐčćžšđ]|\b(?:ad|a\.?d\.?|sad|grad|orad)\s+\d{1,3}\s*$)',
@@ -1069,7 +1067,11 @@ String? _extractRecipientName(List<String> lines, String accountNumber) {
       // biti umetnute između labele "Primalac" i naziva primaoca, pa njih preskačemo
       // (`continue`), a prekidamo samo na novoj sekciji "Svrha uplate".
       final candidates = <String>[];
-      for (var offset = 1; offset <= 10 && i + offset < lines.length; offset++) {
+      for (
+        var offset = 1;
+        offset <= 10 && i + offset < lines.length;
+        offset++
+      ) {
         if (payerIndices.contains(i + offset)) continue;
         final rawNext = _stripRightColumnTail(
           lines[i + offset].split('   ').first,
